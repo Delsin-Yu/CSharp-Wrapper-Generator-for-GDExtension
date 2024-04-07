@@ -16,30 +16,75 @@ internal static class Generator
 {
     public static void Generate()
     {
-        // Process
-        //     .Start(Environment.ProcessPath!, "--dump-extension-api --headless")!
-        //     .WaitForExit();
-        //
-        // Dictionary<string, GodotClassInfo> godotBuiltinClass = GetClasses();
-        //
-        Process
-            .Start(Environment.ProcessPath!, $"res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn --path {Path.GetFullPath("./")} --dump-extension-api --headless")!
-            .WaitForExit();
-
-        Dictionary<string, GodotClassInfo> godotGDEClasses = GetClasses();
-
-        foreach (var (key, godotClassInfo) in godotGDEClasses)
-        {
-            GD.Print(key);
-        }
+        GD.Print($"""
+                 Dumping Godot Builtin Classes...
+                 Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
+                 
+                 Command Line: {Environment.ProcessPath} --dump-extension-api --verbose --headless
+                 
+                 -----------------------Godot Message Start------------------------
+                 """
+                 );
+        var dumpJsonCoreStartInfo =
+            new ProcessStartInfo(
+                Environment.ProcessPath!,
+                "--dump-extension-api --verbose --headless"
+            ) { RedirectStandardOutput = true };
         
-        // GD.Print(godotGDEClasses.Count - godotBuiltinClass.Count);
-        //
-        // foreach (var gdeClassName in godotGDEClasses.Keys.Except(godotBuiltinClass.Keys))
-        // {
-        //     var gdeClassInfo = godotGDEClasses[gdeClassName];
-        //     GD.Print(gdeClassName);
-        // }
+        var process = Process.Start(dumpJsonCoreStartInfo)!;
+        process.WaitForExit();
+        GD.Print("> " + process.StandardOutput.ReadToEnd().ReplaceLineEndings("\n> "));
+        process.Dispose();
+
+        
+        var godotBuiltinClass = GetClasses();
+        GD.Print($"""
+                  -----------------------Godot Message End------------------------
+                  
+                  Finish Collecting Builtin Classes.
+
+                  Dumping Godot Builtin Classes With GDExtensions...
+                  Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
+                  With Current Project Root ({Path.GetFullPath("./")})
+                  Command Line: {Environment.ProcessPath} res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn --path {Path.GetFullPath("./")} --dump-extension-api --headless --verbose --editor
+                  
+                  -----------------------Godot Message Start------------------------
+                  """
+                 );
+        
+        GD.Print("Dumping Godot Engine Classes With GDExtension...");
+        var dumpJsonGDEStartInfo =
+            new ProcessStartInfo(
+                Environment.ProcessPath!,
+                $"res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn" +
+                $" --path {Path.GetFullPath("./")}" +
+                $" --dump-extension-api" +
+                $" --headless" +
+                $" --verbose" +
+                $" --editor"
+            ) { RedirectStandardOutput = true };
+        
+        process = Process.Start(dumpJsonGDEStartInfo)!;
+        process.WaitForExit();
+        GD.Print("> " + process.StandardOutput.ReadToEnd().ReplaceLineEndings("\n> "));
+        process.Dispose();
+
+        var godotGDEClasses = GetClasses();
+        
+        GD.Print($"""
+                  -----------------------Godot Message End------------------------
+                  
+                  Finish Collecting GDExtension Classes.
+                  """
+        );
+        
+        GD.Print($"""
+                 Classes in extension_api.json from:
+                 Godot Editor ({Path.GetFileName(Environment.ProcessPath)}): {godotBuiltinClass.Count}
+                 Current Project ({Path.GetDirectoryName(Path.GetFullPath("./"))}): {godotGDEClasses.Count}
+                 Class Count in ClassDB {ClassDB.GetClassList().Length}
+                 """
+                 );
     }
 
     private static Dictionary<string, GodotClassInfo> GetClasses()
