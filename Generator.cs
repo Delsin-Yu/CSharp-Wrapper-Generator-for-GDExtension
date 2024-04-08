@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -9,6 +10,70 @@ namespace GDExtensionAPIGenerator;
 
 internal static class Generator
 {
+    public static bool CheckGodotPath(string path, out string? errorMessage)
+    {
+        const string validateMessage = "Hello from Godot Engine.";        
+        
+        const string validationScript =
+            $"""
+            extends SceneTree
+            
+            func _init():
+            	print("{validateMessage}")
+            	quit()
+            """;
+
+        const string validationFileName = "Validation.gd";
+
+        File.WriteAllText(validationFileName, validationScript);
+        
+        var validationStartInfo =
+            new ProcessStartInfo(
+                path,
+                $"--headless " +
+                $"--script {Path.GetFullPath(validationFileName)} " +
+                $"--quit" 
+            ) { RedirectStandardOutput = true };
+
+        bool isGodot;
+        try
+        {
+            var process = Process.Start(validationStartInfo)!;
+            process.WaitForExit();
+            isGodot = process.StandardOutput.ReadToEnd().Contains(validateMessage, StringComparison.Ordinal);
+        }
+        catch (Exception e)
+        {
+            errorMessage = $"The specified Godot Executable Path is not valid!\n" +
+                           $"{e.GetType().Name}:" +
+                           $"\n    {e.Message}";
+            return false;
+        }
+    
+        if (!isGodot)
+        {
+            errorMessage = "The specified Godot Executable Path is not valid!";
+            return false;
+        }
+        
+        //File.Delete(validationFileName);
+
+        errorMessage = null;
+        return true;
+    }
+    
+    public static bool CheckProjectPath(string path, out string? errorMessage)
+    {
+        if (Directory.GetFiles(path, "project.godot", SearchOption.TopDirectoryOnly).Length != 1)
+        {
+            errorMessage = "The specified Godot Project Path is not valid!";
+            return false;
+        }
+
+        errorMessage = null;
+        return true;
+    }
+    
     public static void Generate(string godotPath, string projectPath)
     {
         GD.Print($"""
@@ -23,7 +88,9 @@ internal static class Generator
         var dumpJsonCoreStartInfo =
             new ProcessStartInfo(
                 godotPath,
-                "--dump-extension-api --verbose --headless"
+                " --dump-extension-api" +
+                " --verbose" +
+                " --headless"
             ) { RedirectStandardOutput = true };
         
         var process = Process.Start(dumpJsonCoreStartInfo)!;
@@ -41,7 +108,7 @@ internal static class Generator
                   Dumping Godot Builtin Classes With GDExtensions...
                   Starting Godot Editor ({godotPath})
                   With Current Project Root ({projectPath})
-                  Command Line: {godotPath} res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn --path {projectPath} --dump-extension-api --headless --verbose --editor
+                  Command Line: {godotPath} --path {projectPath} --dump-extension-api --headless --verbose --editor --quit
                   
                   -----------------------Godot Message Start------------------------
                   """
@@ -51,13 +118,17 @@ internal static class Generator
         var dumpJsonGDEStartInfo =
             new ProcessStartInfo(
                 godotPath,
-                $"res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn" +
                 $" --path {projectPath}" +
                 $" --dump-extension-api" +
-                $" --headless" +
+                $" --headless" + 
                 $" --verbose" +
-                $" --editor"
-            ) { RedirectStandardOutput = true };
+                $" --editor" +
+                $" --quit"
+            )
+            {
+                RedirectStandardOutput = true,
+                WorkingDirectory = projectPath
+            };
         
         process = Process.Start(dumpJsonGDEStartInfo)!;
         process.WaitForExit();
@@ -76,8 +147,7 @@ internal static class Generator
         GD.Print($"""
                  Classes in extension_api.json from:
                  Godot Editor ({Path.GetFileName(godotPath)}): {godotBuiltinClass.Count}
-                 Current Project ({Path.GetDirectoryName(projectPath)}): {godotGDEClasses.Count}
-                 Class Count in ClassDB {ClassDB.GetClassList().Length}
+                 Current Project ({Path.GetFileName(projectPath)}): {godotGDEClasses.Count}
                  """
                  );
     }
