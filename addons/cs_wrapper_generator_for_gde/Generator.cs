@@ -5,30 +5,22 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Godot;
 using Environment = System.Environment;
 
 namespace GDExtensionAPIGenerator;
 
-internal static class Generator
+internal static partial class Generator
 {
-    public static Button Button { get; set; }
-
+    [GeneratedRegex(@"WRAPPER_GENERATOR_DUMP_CLASS_DB_START(?<ClassNames>.+?)WRAPPER_GENERATOR_DUMP_CLASS_DB_END", RegexOptions.Singleline | RegexOptions.NonBacktracking)]
+    private static partial Regex GetExtractClassNameRegex(); 
+    
     public static void Generate()
-    {
-        Button.Disabled = true;
-        GenerateSync();
-        Button.Disabled = false;
-    }
-
-
-    private static void GenerateSync()
     {
         const string dumpDBScript =
             """
-            #!/usr/bin/env -S godot -s
-            @tool
             extends SceneTree
 
             func _init() -> void:
@@ -41,48 +33,64 @@ internal static class Generator
         const string dumpDBFileName = "dump_class_db.gd";
 
         var tempPath = Path.GetTempFileName();
-
-
+        
+        File.Delete(tempPath);
+        
         Directory.CreateDirectory(tempPath);
 
         var scriptFullPath = Path.Combine(tempPath, dumpDBFileName);
 
         File.WriteAllText(scriptFullPath, dumpDBScript);
-        // chmod +x
+        
+#if !GODOT_WINDOWS
         if (Environment.OSVersion is { Platform: PlatformID.Unix } or { Platform: PlatformID.MacOSX })
         {
-#pragma warning disable CA1416
             File.SetUnixFileMode(scriptFullPath, UnixFileMode.UserExecute);
-#pragma warning restore CA1416
         }
-
-
+#endif
+        
         var dumpGodotClassProcess = Environment.ProcessPath!;
-        var dumpGodotClassCommands =
-            $"--headless  -s {scriptFullPath}";
+        string[] dumpGodotClassCommands = ["--headless", "--editor", "--script", scriptFullPath];
 
         GD.Print($"""
                   Dumping Godot Builtin Classes...
                   Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
-                  Command Line: {dumpGodotClassProcess} {dumpGodotClassCommands}
-
-                  -----------------------Godot Message Start------------------------
+                  Command Line: {dumpGodotClassProcess} {string.Join(' ', dumpGodotClassCommands)}
                   """
         );
 
-
-        var result = new Godot.Collections.Array();
-        OS.Execute(dumpGodotClassProcess, dumpGodotClassCommands.Split(" "), result);
-        var output     = result.SelectMany(x => x.AsString().Split(Environment.NewLine)).ToArray();
-        var startIndex = Array.IndexOf(output, "WRAPPER_GENERATOR_DUMP_CLASS_DB_START") + 1;
-        var endIndex   = Array.IndexOf(output, "WRAPPER_GENERATOR_DUMP_CLASS_DB_END");
-        output = output[startIndex..endIndex];
-        foreach (var str in output)
+        string resultString;
         {
-            GD.Print(str);
+            using var result = new Godot.Collections.Array();
+            OS.Execute(dumpGodotClassProcess, dumpGodotClassCommands, result);
+            Directory.Delete(tempPath, true);
+            try
+            {
+                resultString = result[0].AsString();
+            }
+            catch (Exception e)
+            {
+                GD.PrintErr(e.ToString());
+                return;
+            }
         }
-        GD.Print("-----------------------Godot Message End------------------------");
-        Directory.Delete(tempPath);
+
+        var matchResult = GetExtractClassNameRegex().Match(resultString);
+        
+        if(!matchResult.Success) return;
+
+        var builtinClassTypes = matchResult
+            .Groups["ClassNames"]
+            .Value
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet();
+
+        var currentClassTypes = ClassDB.GetClassList();
+
+        foreach (var gdeClassNames in currentClassTypes.Except(builtinClassTypes))
+        {
+            GD.Print(gdeClassNames);
+        }
     }
 }
 #endif
