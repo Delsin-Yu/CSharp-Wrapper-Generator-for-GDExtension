@@ -42,13 +42,20 @@ internal static class Generator
 
         var tempPath = Path.GetTempFileName();
 
-        File.Delete(tempPath);
 
         Directory.CreateDirectory(tempPath);
 
         var scriptFullPath = Path.Combine(tempPath, dumpDBFileName);
 
         File.WriteAllText(scriptFullPath, dumpDBScript);
+        // chmod +x
+        if (Environment.OSVersion is { Platform: PlatformID.Unix } or { Platform: PlatformID.MacOSX })
+        {
+#pragma warning disable CA1416
+            File.SetUnixFileMode(scriptFullPath, UnixFileMode.UserExecute);
+#pragma warning restore CA1416
+        }
+
 
         var dumpGodotClassProcess = Environment.ProcessPath!;
         var dumpGodotClassCommands =
@@ -74,8 +81,8 @@ internal static class Generator
         {
             GD.Print(str);
         }
-
-
+        GD.Print("-----------------------Godot Message End------------------------");
+        Directory.Delete(tempPath);
     }
 }
 #endif
