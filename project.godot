@@ -10,19 +10,10 @@ config_version=5
 
 [application]
 
-config/name="C# Wrapper Generator for GDExtension"
-run/main_scene="res://Main.tscn"
+config/name="GDExtensionAPIGenerator"
+run/main_scene="res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn"
 config/features=PackedStringArray("4.3", "C#", "Forward Plus")
-boot_splash/show_image=false
 config/icon="res://icon.svg"
-
-[display]
-
-window/size/viewport_width=600
-window/size/viewport_height=230
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/vsync/vsync_mode=0
 
 [dotnet]
 
@@ -30,4 +21,4 @@ project/assembly_name="GDExtensionAPIGenerator"
 
 [editor_plugins]
 
-enabled=PackedStringArray()
+enabled=PackedStringArray("res://addons/cs_wrapper_generator_for_gde/plugin.cfg")
