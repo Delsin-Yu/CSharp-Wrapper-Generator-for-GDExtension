@@ -42,11 +42,8 @@ internal static partial class Generator
 
         File.WriteAllText(scriptFullPath, dumpDBScript);
         
-#if !GODOT_WINDOWS
-        if (Environment.OSVersion is { Platform: PlatformID.Unix } or { Platform: PlatformID.MacOSX })
-        {
-            File.SetUnixFileMode(scriptFullPath, UnixFileMode.UserExecute);
-        }
+#if GODOT_LINUXBSD || GODOT_MACOS
+        File.SetUnixFileMode(scriptFullPath, UnixFileMode.UserExecute);
 #endif
         
         var dumpGodotClassProcess = Environment.ProcessPath!;
