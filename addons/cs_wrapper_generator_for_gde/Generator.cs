@@ -3,6 +3,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Godot;
 using Environment = System.Environment;
@@ -16,28 +18,28 @@ internal static class Generator
     public static void Generate()
     {
         Button.Disabled = true;
-        GenerateAsync()
-            .ContinueWith(_ => Button.Disabled = false)
-            .ConfigureAwait(true);
+        GenerateSync();
+        Button.Disabled = false;
     }
 
 
-    private static async Task GenerateAsync()
+    private static void GenerateSync()
     {
         const string dumpDBScript =
             """
-            extends MainLoop
-            	
-            func _process(delta: float) -> bool:
+            #!/usr/bin/env -S godot -s
+            @tool
+            extends SceneTree
+
+            func _init() -> void:
             	print("WRAPPER_GENERATOR_DUMP_CLASS_DB_START");
             	for name in ClassDB.get_class_list():
             		print(name);
             	print("WRAPPER_GENERATOR_DUMP_CLASS_DB_END");
-            	return true;
+            	quit()
             """;
-        
         const string dumpDBFileName = "dump_class_db.gd";
-        
+
         var tempPath = Path.GetTempFileName();
 
         File.Delete(tempPath);
@@ -46,36 +48,34 @@ internal static class Generator
 
         var scriptFullPath = Path.Combine(tempPath, dumpDBFileName);
 
-        await File.WriteAllTextAsync(scriptFullPath, dumpDBScript).ConfigureAwait(true);
-        
+        File.WriteAllText(scriptFullPath, dumpDBScript);
+
         var dumpGodotClassProcess = Environment.ProcessPath!;
         var dumpGodotClassCommands =
-            $"--script {scriptFullPath} ";
-        
+            $"--headless  -s {scriptFullPath}";
+
         GD.Print($"""
-                 Dumping Godot Builtin Classes...
-                 Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
-                 
-                 Command Line: {dumpGodotClassProcess} {dumpGodotClassCommands}
-                 
-                 -----------------------Godot Message Start------------------------
-                 """
-                 );
+                  Dumping Godot Builtin Classes...
+                  Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
+                  Command Line: {dumpGodotClassProcess} {dumpGodotClassCommands}
 
-        var process = new Process();
-        process.StartInfo.FileName = dumpGodotClassProcess;
-        process.StartInfo.Arguments = dumpGodotClassCommands;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.WorkingDirectory = tempPath;
-        
-        process.Start();
-        await process.WaitForExitAsync().ConfigureAwait(true);
+                  -----------------------Godot Message Start------------------------
+                  """
+        );
 
-        var output = process.StandardOutput.ReadToEnd();
-        process.Dispose();
-        
-        GD.Print(output);
+
+        var result = new Godot.Collections.Array();
+        OS.Execute(dumpGodotClassProcess, dumpGodotClassCommands.Split(" "), result);
+        var output     = result.SelectMany(x => x.AsString().Split(Environment.NewLine)).ToArray();
+        var startIndex = Array.IndexOf(output, "WRAPPER_GENERATOR_DUMP_CLASS_DB_START") + 1;
+        var endIndex   = Array.IndexOf(output, "WRAPPER_GENERATOR_DUMP_CLASS_DB_END");
+        output = output[startIndex..endIndex];
+        foreach (var str in output)
+        {
+            GD.Print(str);
+        }
+
+
     }
 }
 #endif
