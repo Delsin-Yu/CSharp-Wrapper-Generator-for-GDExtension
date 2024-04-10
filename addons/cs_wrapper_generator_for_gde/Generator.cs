@@ -1,108 +1,81 @@
 ﻿#if TOOLS
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Reflection;
+using System.Threading.Tasks;
 using Godot;
-using Godot.BindingsGenerator.ApiDump;
 using Environment = System.Environment;
 
 namespace GDExtensionAPIGenerator;
 
 internal static class Generator
 {
+    public static Button Button { get; set; }
+
     public static void Generate()
     {
+        Button.Disabled = true;
+        GenerateAsync()
+            .ContinueWith(_ => Button.Disabled = false)
+            .ConfigureAwait(true);
+    }
+
+
+    private static async Task GenerateAsync()
+    {
+        const string dumpDBScript =
+            """
+            extends SceneTree
+            
+            func _initialize():
+            	print("WRAPPER_GENERATOR_DUMP_CLASS_DB_START");
+            	for name in ClassDB.get_class_list():
+            		print(name);
+            	print("WRAPPER_GENERATOR_DUMP_CLASS_DB_END");
+            	quit();
+            """;
+        
+        const string dumpDBFileName = "dump_class_db.gd";
+        
+        var tempPath = Path.GetTempFileName();
+
+        File.Delete(tempPath);
+
+        Directory.CreateDirectory(tempPath);
+
+        var scriptFullPath = Path.Combine(tempPath, dumpDBFileName);
+
+        await File.WriteAllTextAsync(scriptFullPath, dumpDBScript).ConfigureAwait(true);
+        
+        var dumpGodotClassProcess = Environment.ProcessPath!;
+        var dumpGodotClassCommands =
+            $"--script {scriptFullPath} ";
+        
         GD.Print($"""
                  Dumping Godot Builtin Classes...
                  Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
                  
-                 Command Line: {Environment.ProcessPath} --dump-extension-api --verbose --headless
+                 Command Line: {dumpGodotClassProcess} {dumpGodotClassCommands}
                  
                  -----------------------Godot Message Start------------------------
                  """
                  );
-        var dumpJsonCoreStartInfo =
-            new ProcessStartInfo(
-                Environment.ProcessPath!,
-                "--dump-extension-api --verbose --headless"
-            ) { RedirectStandardOutput = true };
+
+        var process = new Process();
+        process.StartInfo.FileName = dumpGodotClassProcess;
+        process.StartInfo.Arguments = dumpGodotClassCommands;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.WorkingDirectory = tempPath;
         
-        var process = Process.Start(dumpJsonCoreStartInfo)!;
-        process.WaitForExit();
-        GD.Print("> " + process.StandardOutput.ReadToEnd().ReplaceLineEndings("\n> "));
+        process.Start();
+        await process.WaitForExitAsync().ConfigureAwait(true);
+
+        var output = process.StandardOutput.ReadToEnd();
         process.Dispose();
-
         
-        var godotBuiltinClass = GetClasses();
-        GD.Print($"""
-                  -----------------------Godot Message End------------------------
-                  
-                  Finish Collecting Builtin Classes.
-
-                  Dumping Godot Builtin Classes With GDExtensions...
-                  Starting Godot Editor ({Path.GetFileName(Environment.ProcessPath)})
-                  With Current Project Root ({Path.GetFullPath("./")})
-                  Command Line: {Environment.ProcessPath} res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn --path {Path.GetFullPath("./")} --dump-extension-api --headless --verbose --editor
-                  
-                  -----------------------Godot Message Start------------------------
-                  """
-                 );
-        
-        GD.Print("Dumping Godot Engine Classes With GDExtension...");
-        var dumpJsonGDEStartInfo =
-            new ProcessStartInfo(
-                Environment.ProcessPath!,
-                $"res://addons/cs_wrapper_generator_for_gde/empty_scene.tscn" +
-                $" --path {Path.GetFullPath("./")}" +
-                $" --dump-extension-api" +
-                $" --headless" +
-                $" --verbose" +
-                $" --editor"
-            ) { RedirectStandardOutput = true };
-        
-        process = Process.Start(dumpJsonGDEStartInfo)!;
-        process.WaitForExit();
-        GD.Print("> " + process.StandardOutput.ReadToEnd().ReplaceLineEndings("\n> "));
-        process.Dispose();
-
-        var godotGDEClasses = GetClasses();
-        
-        GD.Print($"""
-                  -----------------------Godot Message End------------------------
-                  
-                  Finish Collecting GDExtension Classes.
-                  """
-        );
-        
-        GD.Print($"""
-                 Classes in extension_api.json from:
-                 Godot Editor ({Path.GetFileName(Environment.ProcessPath)}): {godotBuiltinClass.Count}
-                 Current Project ({Path.GetDirectoryName(Path.GetFullPath("./"))}): {godotGDEClasses.Count}
-                 Class Count in ClassDB {ClassDB.GetClassList().Length}
-                 """
-                 );
-    }
-
-    private static Dictionary<string, GodotClassInfo> GetClasses()
-    {
-        const string extensionPath = "./extension_api.json";
-        var fileStream = File.OpenRead(extensionPath);
-        var dictionary = GodotApi.Deserialize(fileStream)!.Classes.ToDictionary(x => x.Name, x => x);
-        fileStream.Dispose();
-        File.Delete(extensionPath);
-        return dictionary;
-    }
-
-    public static void UnloadSystemTextJson()
-    {
-        var assembly = typeof(JsonSerializerOptions).Assembly;
-        var updateHandlerType = assembly.GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
-        var clearCacheMethod = updateHandlerType?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public);
-        clearCacheMethod?.Invoke(null, new object[] { null }); 
+        GD.Print(output);
     }
 }
 #endif

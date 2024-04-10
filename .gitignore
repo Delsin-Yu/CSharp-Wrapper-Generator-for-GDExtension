@@ -21,7 +21,6 @@ data_*/
 Builds/
 
 # Ignore stub bin and obj folders
-bin/
 obj/
 
 # Tests
