@@ -12,7 +12,6 @@ config_version=5
 
 config/name="GDExtensionAPIGenerator"
 run/main_scene="res://main.tscn"
-run/main_loop_type="CustomMainLoop"
 config/features=PackedStringArray("4.3", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 

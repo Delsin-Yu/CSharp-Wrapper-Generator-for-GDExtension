@@ -2,21 +2,25 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Godot;
+using Array = Godot.Collections.Array;
 using Environment = System.Environment;
+using FileAccess = Godot.FileAccess;
 
 namespace GDExtensionAPIGenerator;
 
-internal static partial class Generator
+internal static partial class GeneratorMain
 {
+    private const string GENERATOR_DUMP_HEADER = "WRAPPER_GENERATOR_DUMP_CLASS_DB_START";
+    private const string GENERATOR_DUMP_FOOTER = "WRAPPER_GENERATOR_DUMP_CLASS_DB_END";
+    
     [GeneratedRegex(
-        "WRAPPER_GENERATOR_DUMP_CLASS_DB_START(?<ClassNames>.+?)WRAPPER_GENERATOR_DUMP_CLASS_DB_END",
+        $"{GENERATOR_DUMP_HEADER}(?<ClassNames>.+?){GENERATOR_DUMP_FOOTER}",
         RegexOptions.Singleline | RegexOptions.NonBacktracking
     )]
     private static partial Regex GetExtractClassNameRegex();
@@ -65,16 +69,74 @@ internal static partial class Generator
             .Except(builtinClassTypes)
             .Select(x => (StringName)x)
             .Where(ClassDB.CanInstantiate)
-            .ToHashSet();
+            .ToArray();
 
-        foreach (var gdeClassName in filteredTypes)
+        var generateSourceCodeTasks = new Task<(string fileName, string fileContent)>[filteredTypes.Length];
+
+        for (var index = 0; index < filteredTypes.Length; index++)
         {
-            GD.Print($"ClassNames:{gdeClassName} IsClassEnabled:{ClassDB.IsClassEnabled(gdeClassName)} GetParentClass:{ClassDB.GetParentClass(gdeClassName)}");
+            var gdeClassName = filteredTypes[index];
+            generateSourceCodeTasks[index] = Task.Run(() => GenerateSourceCodeForClassName(gdeClassName));
         }
 
-        GD.Print($"currentClassTypes:{currentClassTypes.Length} builtinClassTypes:{builtinClassTypes.Count} diffType:{filteredTypes.Count}");
+        var whenAllTask = Task.WhenAll(generateSourceCodeTasks);
+        whenAllTask.Wait();
 
-        //EditorInterface.Singleton.RestartEditor(true);
+        const string wrapperPath = "res://GDExtensionWrappers/";
+
+        DirAccess.MakeDirAbsolute(wrapperPath);
+        
+        foreach (var (fileName, fileContent) in whenAllTask.Result)
+        {
+            using var fileAccess = FileAccess.Open($"{wrapperPath}{fileName}", FileAccess.ModeFlags.Write);
+            fileAccess.StoreString(fileContent);
+        }
+
+        EditorInterface
+            .Singleton
+            .GetResourceFilesystem()
+            .Scan();
+    }
+
+    private static (string fileName, string fileContent) GenerateSourceCodeForClassName(string className)
+    {
+        const string indentation = "    ";
+        
+        var scriptBuilder = new StringBuilder();
+
+        const string namespaceDefinition = "GDExtension.Wrappers";
+        
+        var classNameMap = GeneratorMain.GetGodotSharpTypeNameMap();
+
+        var parentTypeName = ClassDB.GetParentClass(className);
+
+        parentTypeName = classNameMap.GetValueOrDefault(parentTypeName, parentTypeName);
+        
+        scriptBuilder.AppendLine(
+            $$"""
+             using Godot;
+             
+             namespace {{namespaceDefinition}};
+             
+             public partial class {{className}} : {{parentTypeName}}
+             {
+             """
+        );
+        
+        var propertyList = ClassDB.ClassGetPropertyList(className, true);
+
+        foreach (var propertyDictionary in propertyList)
+        {
+            if (!PropertyGenerator.TryGenerate(
+                    classNameMap,
+                    propertyDictionary,
+                    out var generatedPropertyCode
+                )) continue;
+            scriptBuilder.AppendLine($"{indentation}{generatedPropertyCode.ReplaceLineEndings($"\n{indentation}")}");
+        }
+
+        scriptBuilder.Append('}');
+        return ($"{className}.gdextension.wrapper.cs" ,scriptBuilder.ToString());
     }
 
     private static bool ExtractClassNamesFromStdOut(string resultString, out HashSet<string> builtinClassTypes)
@@ -107,13 +169,13 @@ internal static partial class Generator
                 {
                     var relativePath = Path.GetRelativePath(godotExecutableDir, sourcePath);
                     var destPath = Path.Combine(tempPath, relativePath);
-                    var destDir = Path.GetDirectoryName(destPath);
+                    var destDir = Path.GetDirectoryName(destPath)!;
                     if (!Directory.Exists(destDir))
                     {
 #if GODOT_OSX || GODOT_LINUXBSD
-                        Directory.CreateDirectory(destDir, UnixFileMode.UserExecute);
+                        Directory.CreateDirectory(destDir!, UnixFileMode.UserExecute);
 #else
-                        Directory.CreateDirectory(destDir);
+                        Directory.CreateDirectory(destDir!);
 #endif
                     }
 
@@ -142,18 +204,18 @@ internal static partial class Generator
     private static string CreateDumpDBScript(string tempPath)
     {
         const string dumpDBScript =
-            """
+            $"""
             @tool
             extends SceneTree
             func  _process(delta: float) -> bool:
-            	print("WRAPPER_GENERATOR_DUMP_CLASS_DB_START");
+            	print("{GENERATOR_DUMP_HEADER}");
             	for name in ClassDB.get_class_list():
             		print(name);
-            	print("WRAPPER_GENERATOR_DUMP_CLASS_DB_END");
+            	print("{GENERATOR_DUMP_FOOTER}");
             	quit()
             	return true
-            	
             """;
+        
         const string dumpDBFileName = "dump_class_db.gd";
         var scriptFullPath = Path.Combine(tempPath, dumpDBFileName);
         File.WriteAllText(scriptFullPath, dumpDBScript);

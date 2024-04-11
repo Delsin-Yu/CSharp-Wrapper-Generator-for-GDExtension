@@ -11,14 +11,14 @@ public partial class WrapperGeneratorMain : EditorPlugin
 	public override void _EnterTree()
 	{
 		_button = new() { Text = "Generate", Name = "Wrapper Generator" };
-		_button.Pressed += Generator.Generate;
+		_button.Pressed += GeneratorMain.Generate;
 		AddControlToDock(DockSlot.LeftBr, _button);
 	}
 
 	public override void _ExitTree()
 	{
 		RemoveControlFromDocks(_button);
-		_button.Pressed -= Generator.Generate;
+		_button.Pressed -= GeneratorMain.Generate;
 		_button.Free();
 	}
 }
