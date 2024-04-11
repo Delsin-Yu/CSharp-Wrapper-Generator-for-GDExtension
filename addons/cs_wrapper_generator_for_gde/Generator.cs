@@ -24,9 +24,13 @@ internal static partial class Generator
     public static void Generate()
     {
         var tempPath = CreateTempDirectory();
+        GD.Print($"Temp workspace directory: {tempPath}");
         var scriptFullPath = CreateDumpDBScript(tempPath);
+        GD.Print($"Godot Core ClassDB Dump script path: {scriptFullPath}");
         var dummyProjectPath = CreateDummyProject(tempPath);
+        GD.Print($"Dummy Project path: {dummyProjectPath}");
         var godotExecutablePath = CopyGodotExecutable(Environment.ProcessPath!, tempPath);
+        GD.Print($"Godot Executable path: {godotExecutablePath}");
         string[] dumpGodotClassCommands = ["--headless", "--script", scriptFullPath, "--editor", "--verbose", "--path", dummyProjectPath];
 
         GD.Print(
