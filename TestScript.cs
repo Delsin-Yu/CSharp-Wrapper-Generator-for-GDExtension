@@ -5,11 +5,10 @@ namespace GDExtensionAPIGenerator;
 
 public partial class TestScript : GDCubismUserModel
 {
+    [Export] private GDCubismUserModel _userModel;
+    
     public override void _Ready()
     {
         LoadExpressions = false;
-        LoadMotions = false;
-        SpeedScale = 1;
-        AutoScale = false;
     }
 }

@@ -8,7 +8,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Godot;
-using Array = Godot.Collections.Array;
 using Environment = System.Environment;
 using FileAccess = Godot.FileAccess;
 
