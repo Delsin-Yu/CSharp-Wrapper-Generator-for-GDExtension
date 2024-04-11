@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using Godot;
 using Godot.Collections;
 
@@ -220,19 +221,11 @@ internal static partial class CodeGenerator
             godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
 
             stringBuilder
-                .AppendLine(IDNT + "//" + propertyDictionary)
-                .Append(IDNT)
-                .AppendLine($"public {typeName} {nameValue.ToPascalCase()}")
-                .Append(IDNT)
-                .AppendLine("{")
-                .Append(IDNT)
-                .Append(IDNT)
-                .AppendLine($"""get => ({typeName}){backing}Get("{nameValue}");""")
-                .Append(IDNT)
-                .Append(IDNT)
-                .AppendLine($"""set => {backing}Set("{nameValue}", Variant.From(value));""")
-                .Append(IDNT)
-                .AppendLine("}")
+                .AppendLine($"{IDNT}public {typeName} {EscapeAndFormatName(nameValue)}")
+                .AppendLine($"{IDNT}{{")
+                .AppendLine($"""{IDNT}{IDNT}get => ({typeName}){backing}Get("{nameValue}");""")
+                .AppendLine($"""{IDNT}{IDNT}set => {backing}Set("{nameValue}", Variant.From(value));""")
+                .AppendLine($"{IDNT}}}")
                 .AppendLine();
             
             propertyDictionary.Dispose();
@@ -274,12 +267,20 @@ internal static partial class CodeGenerator
             Variant.Type.PackedVector3Array => "Godot.Vector3[]",
             Variant.Type.PackedColorArray => "Godot.Color[]",
             Variant.Type.Bool => "bool",
-            Variant.Type.Int => "long",
-            Variant.Type.Float => "double",
+            Variant.Type.Int => "int",
+            Variant.Type.Float => "float",
             Variant.Type.String => "string",
             Variant.Type.Object => className,
             Variant.Type.Dictionary => "Godot.Collections.Dictionary",
             Variant.Type.Array => "Godot.Collections.Array",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
+
+    [GeneratedRegex(@"[^a-zA-Z0-9_]")]
+    private static partial Regex EscapeNameRegex();
+    
+    public static string EscapeAndFormatName(string sourceName) => 
+        EscapeNameRegex()
+            .Replace(sourceName, "_")
+            .ToPascalCase();
 }
