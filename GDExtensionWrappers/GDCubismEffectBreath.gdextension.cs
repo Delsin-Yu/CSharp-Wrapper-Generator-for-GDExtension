@@ -1,7 +1,11 @@
 using Godot;
 
-namespace GDExtension.NodeWrappers;
+namespace GDExtension.RefCountedWrappers;
 
-public partial class GDCubismEffectBreath : GDCubismEffect
+public class GDCubismEffectBreath : GDCubismEffect
 {
+
+    protected override RefCounted Construct() =>
+        (RefCounted)ClassDB.Instantiate("GDCubismEffectBreath");
+
 }

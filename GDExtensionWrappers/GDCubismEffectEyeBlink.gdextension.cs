@@ -1,7 +1,11 @@
 using Godot;
 
-namespace GDExtension.NodeWrappers;
+namespace GDExtension.RefCountedWrappers;
 
-public partial class GDCubismEffectEyeBlink : GDCubismEffect
+public class GDCubismEffectEyeBlink : GDCubismEffect
 {
+
+    protected override RefCounted Construct() =>
+        (RefCounted)ClassDB.Instantiate("GDCubismEffectEyeBlink");
+
 }

@@ -1,18 +1,9 @@
-using System;
 using Godot;
 
-namespace GDExtension.RefCountedWrappers;
+namespace GDExtension.NodeWrappers;
 
-public class JoltPhysicsServerFactory3D : IDisposable
+public partial class JoltPhysicsServerFactory3D : GodotObject
 {
-
-    protected virtual RefCounted Construct() =>
-        (RefCounted)ClassDB.Instantiate("JoltPhysicsServerFactory3D");
-
-    protected readonly RefCounted _backing;
-
-    public JoltPhysicsServerFactory3D() => _backing = Construct();
-
-    public void Dispose() => _backing.Dispose();
+    public JoltPhysicsServer3D CreateServer() => new(Call("create_server").As<RefCounted>());
 
 }

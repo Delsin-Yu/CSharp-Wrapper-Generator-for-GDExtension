@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Godot;
@@ -12,17 +13,43 @@ internal static partial class CodeGenerator
     private static (string fileName, string fileContent) GenerateSourceCodeForType(
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         ICollection<string> godotBuiltinClassNames
 
     )
     {
         var codeBuilder = new StringBuilder();
 
-        if (ContainsParent(gdeTypeInfo, nameof(Resource))) GenerateCodeForResource(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap, godotBuiltinClassNames);
-        else if (ContainsParent(gdeTypeInfo, nameof(Node))) GenerateCodeForNode(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap);
-        else GenerateCodeForRefCounted(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap, godotBuiltinClassNames);
-
+        switch (GetBaseType(gdeTypeInfo))
+        {
+            case BaseType.Resource:
+                GenerateCodeForResource(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
+                break;
+            case BaseType.RefCounted:
+                GenerateCodeForNode(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
+                break;
+            case BaseType.Node:
+                GenerateCodeForRefCounted(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+        
         return ($"{gdeTypeInfo.TypeName}.gdextension.cs", codeBuilder.ToString());
+    }
+    
+    private enum BaseType
+    {
+        Resource,
+        RefCounted,
+        Node
+    }
+
+    private static BaseType GetBaseType(ClassInfo classInfo)
+    {
+        if (ContainsParent(classInfo, nameof(Resource))) return BaseType.Resource;
+        if (ContainsParent(classInfo, nameof(Node))) return BaseType.Node;
+        return BaseType.RefCounted;
     }
 
     private static bool ContainsParent(ClassInfo classInfo, string parentName)
@@ -36,7 +63,7 @@ internal static partial class CodeGenerator
         }
     }
 
-    private const string IDNT = "    ";
+    private const string TAB = "    ";
     private const string NAMESPACE_RES = "GDExtension.ResourcesWrappers";
     private const string NAMESPACE_RC = "GDExtension.RefCountedWrappers";
     private const string NAMESPACE_NODE = "GDExtension.NodeWrappers";
@@ -44,7 +71,9 @@ internal static partial class CodeGenerator
     private static void GenerateCodeForNode(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
-        IReadOnlyDictionary<string, string> godotSharpTypeNameMap
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        ICollection<string> godotBuiltinClassNames
     )
     {
         var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
@@ -61,7 +90,8 @@ internal static partial class CodeGenerator
               """
         );
 
-        ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, string.Empty);
+        var propertyInfoList = ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, string.Empty);
+        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, string.Empty);
 
         codeBuilder.Append('}');
     }
@@ -69,6 +99,7 @@ internal static partial class CodeGenerator
     private static void GenerateCodeForRefCounted(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames
     )
@@ -77,6 +108,7 @@ internal static partial class CodeGenerator
         var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
         
         const string backingName = "_backing";
+        const string backingArgument = "backing";
         const string constructMethodName = "Construct";
         var refCountedName = nameof(RefCounted);
 
@@ -94,14 +126,19 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : IDisposable
                   {
                   
-                  {{IDNT}}protected virtual {{refCountedName}} {{constructMethodName}}() =>
-                  {{IDNT}}{{IDNT}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  {{TAB}}protected virtual {{refCountedName}} {{constructMethodName}}() =>
+                  {{TAB}}{{TAB}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
                   
-                  {{IDNT}}protected readonly {{refCountedName}} {{backingName}};
+                  {{TAB}}public {{displayTypeName}} {{constructMethodName}}({{refCountedName}} {{backingArgument}}) =>
+                  {{TAB}}{{TAB}}new {{displayTypeName}}({{backingArgument}});
                   
-                  {{IDNT}}public {{displayTypeName}}() => {{backingName}} = {{constructMethodName}}();
+                  {{TAB}}protected readonly {{refCountedName}} {{backingName}};
                   
-                  {{IDNT}}public void Dispose() => {{backingName}}.Dispose();
+                  {{TAB}}public {{displayTypeName}}() => {{backingName}} = {{constructMethodName}}();
+                  
+                  {{TAB}}private {{displayTypeName}}({{refCountedName}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
+                  
+                  {{TAB}}public void Dispose() => {{backingName}}.Dispose();
 
                   """
             );
@@ -117,14 +154,15 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
 
-                  {{IDNT}}protected override {{refCountedName}} {{constructMethodName}}() =>
-                  {{IDNT}}{{IDNT}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  {{TAB}}protected override {{refCountedName}} {{constructMethodName}}() =>
+                  {{TAB}}{{TAB}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
 
                   """
             );
         }
 
-        ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        var propertyInfoList = ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, $"{backingName}.");
         
         codeBuilder.Append('}');
     }
@@ -133,6 +171,7 @@ internal static partial class CodeGenerator
     private static void GenerateCodeForResource(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames
     )
@@ -156,12 +195,12 @@ internal static partial class CodeGenerator
 
                   public class {{displayTypeName}}
                   {
-                  {{IDNT}}protected readonly {{resourceName}} {{backingName}};
+                  {{TAB}}protected readonly {{resourceName}} {{backingName}};
 
-                  {{IDNT}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
-                  {{IDNT}}{
-                  {{IDNT}}{{IDNT}}{{backingName}} = {{backingArgument}};
-                  {{IDNT}}}
+                  {{TAB}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
+                  {{TAB}}{
+                  {{TAB}}{{TAB}}{{backingName}} = {{backingArgument}};
+                  {{TAB}}}
 
                   """
             );
@@ -177,18 +216,53 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
                   
-                  {{IDNT}}public {{displayTypeName}}({{resourceName}} {{backingArgument}}) : base({{backingArgument}}) { }
+                  {{TAB}}public {{displayTypeName}}({{resourceName}} {{backingArgument}}) : base({{backingArgument}}) { }
 
                   """
             );
         }
 
-        ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        var propertyInfoList = ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, $"{backingName}.");
         
         codeBuilder.Append('}');
     }
 
-    private static void ConstructProperties(
+    private readonly struct PropertyInfo
+    {
+        public readonly Variant.Type Type = Variant.Type.Nil;
+        public readonly string NativeName;
+        public readonly string ClassName;
+        public readonly PropertyHint Hint = PropertyHint.None;
+        public readonly string HintString;
+        public readonly PropertyUsageFlags Usage = PropertyUsageFlags.Default;
+
+        public PropertyInfo(Dictionary dictionary)
+        {
+            using var nameInfo = dictionary["name"];
+            using var classNameInfo = dictionary["class_name"];
+            using var typeInfo = dictionary["type"];
+            using var hintInfo = dictionary["hint"];
+            using var hintStringInfo = dictionary["hint_string"];
+            using var usageInfo = dictionary["usage"];
+            
+            Type = typeInfo.As<Variant.Type>();;
+            NativeName = nameInfo.AsString();
+            ClassName = classNameInfo.AsString(); 
+            Hint = hintInfo.As<PropertyHint>();
+            HintString = hintStringInfo.AsString();
+            Usage = usageInfo.As<PropertyUsageFlags>();
+        }
+
+        public bool IsGroupOrSubgroup => Usage.HasFlag(PropertyUsageFlags.Group) || Usage.HasFlag(PropertyUsageFlags.Subgroup);
+        public bool IsVoid => Type is Variant.Type.Nil;
+        
+        public string GetTypeName() => VariantToTypeName(Type, ClassName);
+        public string GetPropertyName() => EscapeAndFormatName(NativeName);
+        public string GetArgumentName() => EscapeAndFormatName(NativeName, true);
+    }
+    
+    private static IReadOnlyList<PropertyInfo> ConstructProperties(
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         StringBuilder stringBuilder,
@@ -197,75 +271,243 @@ internal static partial class CodeGenerator
     {
         var propertyList = ClassDB.ClassGetPropertyList(gdeTypeInfo.TypeName, true);
 
+        var propertyInfoList = new List<PropertyInfo>();
+        
         foreach (var propertyDictionary in propertyList)
         {
-            using var nameInfo = propertyDictionary["name"];
-            using var classNameInfo = propertyDictionary["class_name"];
-            using var typeInfo = propertyDictionary["type"];
-            using var hintInfo = propertyDictionary["hint"];
-            using var hintStringInfo = propertyDictionary["hint_string"];
-            using var usageInfo = propertyDictionary["usage"];
+            var propertyInfo = new PropertyInfo(propertyDictionary);
+            propertyInfoList.Add(propertyInfo);
 
-            var nameValue = nameInfo.AsString();
-            var classNameValue = classNameInfo.AsString();
-            var typeValue = typeInfo.As<Variant.Type>();
-            // var hintValue = hintInfo.As<PropertyHint>();
-            // var hintStringValue = hintStringInfo.AsString();
-            var usageValue = usageInfo.As<PropertyUsageFlags>();
+            if (propertyInfo.IsGroupOrSubgroup) continue;
 
-            if ((usageValue & PropertyUsageFlags.Group) != 0) continue;
-            if ((usageValue & PropertyUsageFlags.Subgroup) != 0) continue;
-
-            var typeName = VariantToTypeName(typeValue, classNameValue);
+            var typeName = propertyInfo.GetTypeName();
 
             godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
 
             stringBuilder
-                .AppendLine($"{IDNT}public {typeName} {EscapeAndFormatName(nameValue)}")
-                .AppendLine($"{IDNT}{{")
-                .AppendLine($"""{IDNT}{IDNT}get => ({typeName}){backing}Get("{nameValue}");""")
-                .AppendLine($"""{IDNT}{IDNT}set => {backing}Set("{nameValue}", Variant.From(value));""")
-                .AppendLine($"{IDNT}}}")
+                .AppendLine($"{TAB}public {typeName} {propertyInfo.GetPropertyName()}")
+                .AppendLine($"{TAB}{{")
+                .AppendLine($"""{TAB}{TAB}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
+                .AppendLine($"""{TAB}{TAB}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
+                .AppendLine($"{TAB}}}")
                 .AppendLine();
             
             propertyDictionary.Dispose();
         }
+
+        return propertyInfoList;
     }
 
+    private struct MethodInfo
+    {
+        public readonly string NativeName;
+        public readonly PropertyInfo ReturnValue;
+        public readonly MethodFlags Flags;
+        public readonly int Id = 0;
+        public readonly PropertyInfo[] Arguments;
+        public readonly Variant[] DefaultArguments;
+
+        public MethodInfo(Dictionary dictionary)
+        {
+            using var nameInfo = dictionary["name"];
+            using var argsInfo = dictionary["args"];
+            using var defaultArgsInfo = dictionary["default_args"];
+            using var flagsInfo = dictionary["flags"];
+            using var idInfo = dictionary["id"];
+            using var returnInfo = dictionary["return"];
+
+            NativeName = nameInfo.AsString();
+            ReturnValue = new(returnInfo.As<Dictionary>());
+            Flags = flagsInfo.As<MethodFlags>();
+            Id = idInfo.AsInt32();
+            Arguments = argsInfo.As<Array<Dictionary>>().Select(x => new PropertyInfo(x)).ToArray();
+            DefaultArguments = defaultArgsInfo.As<Array<Variant>>().ToArray();
+        }
+        
+        public string GetMethodName() => EscapeAndFormatName(NativeName);
+    }
+    
+    private static void ConstructMethods(
+        ClassInfo gdeTypeInfo,
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        ICollection<string> builtinTypeNames,
+        IReadOnlyList<PropertyInfo> propertyInfos,
+        StringBuilder stringBuilder,
+        string backing
+    )
+    {
+        var methodList = ClassDB.ClassGetMethodList(gdeTypeInfo.TypeName, true);
+
+        foreach (var methodDictionary in methodList)
+        {
+            var methodInfo = new MethodInfo(methodDictionary);
+
+            var methodNativeName = methodInfo.NativeName;
+            if (propertyInfos.Any(
+                    x =>
+                    {
+                        var propertyNativeName = x.NativeName;
+                        if (methodNativeName.Contains(propertyNativeName))
+                        {
+                            var index = methodNativeName.IndexOf(propertyNativeName, StringComparison.Ordinal);
+                            var spiltResult = methodNativeName.Remove(index, propertyNativeName.Length);
+                            if (spiltResult is "set_" or "get_") return true;
+                        }
+                        var propertyNativeNameEscaped = EscapeNameRegex().Replace(propertyNativeName, "_");
+                        if (methodNativeName.Contains(propertyNativeNameEscaped))
+                        {
+                            var index = methodNativeName.IndexOf(propertyNativeNameEscaped, StringComparison.Ordinal);
+                            var spiltResult = methodNativeName.Remove(index, propertyNativeNameEscaped.Length);
+                            if (spiltResult is "set_" or "get_") return true;
+                        }
+                        return false;
+                    }
+                )) continue;
+            
+            stringBuilder
+                .Append($"{TAB}public ")
+                .Append(methodInfo.ReturnValue.GetTypeName())
+                .Append(' ')
+                .Append(methodInfo.GetMethodName())
+                .Append('(');
+            
+            BuildupMethodArguments(stringBuilder, methodInfo.Arguments);
+
+            stringBuilder.Append(") => ");
+
+            if (!methodInfo.ReturnValue.IsVoid && gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
+            {
+                stringBuilder.Append("new(");
+            }
+            
+            stringBuilder
+                .Append(backing)
+                .Append("Call(\"")
+                .Append(methodNativeName)
+                .Append('"');
+
+            if (methodInfo.Arguments.Length > 0)
+            {
+                stringBuilder.Append(", ");
+                BuildupMethodCallArguments(stringBuilder, methodInfo.Arguments);
+            }
+
+            stringBuilder.Append(')');
+
+            if (!methodInfo.ReturnValue.IsVoid)
+            {
+                if (gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
+                {
+                    /*
+                         public JoltPhysicsServer3D CreateServer()
+                        {
+                            var baseType = Call("create_server").As<PhysicsServer3DExtension>();
+                            baseType.SetScript(GD.Load(""));
+                            return (JoltPhysicsServer3D)baseType;
+                        }
+                     */
+                    
+                    var interopType = GetRootParentType(returnTypeInfo, builtinTypeNames);
+                    interopType = godotSharpTypeNameMap.GetValueOrDefault(interopType, interopType);
+                    stringBuilder.Append($".As<{interopType}>())");
+                }
+                else
+                {
+                    stringBuilder.Append($".As<{methodInfo.ReturnValue.GetTypeName()}>()");
+                }
+            }
+            
+            stringBuilder.AppendLine(";").AppendLine();
+            
+            methodDictionary.Dispose();
+        }
+    }
+
+    private static string GetRootParentType(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes) =>
+        GetBaseType(gdeTypeInfo) switch
+        {
+            BaseType.Resource => nameof(Resource),
+            BaseType.RefCounted => nameof(RefCounted),
+            BaseType.Node => GetParentGDERootParent(gdeTypeInfo, builtinTypes),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+    private static string GetParentGDERootParent(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes)
+    {
+        while (true)
+        {
+            var parentType = gdeTypeInfo.ParentType;
+            if (builtinTypes.Contains(parentType.TypeName)) return parentType.TypeName;
+            gdeTypeInfo = parentType;
+        }
+    }
+
+    private static void BuildupMethodArguments(StringBuilder stringBuilder, PropertyInfo[] propertyInfos)
+    {
+        for (var i = 0; i < propertyInfos.Length; i++)
+        {
+            var propertyInfo = propertyInfos[i];
+            stringBuilder
+                .Append(propertyInfo.GetTypeName())
+                .Append(' ')
+                .Append(propertyInfo.GetArgumentName());
+
+            if (i != propertyInfos.Length - 1)
+            {
+                stringBuilder.Append(", ");
+            }
+        }
+    }
+
+    private static void BuildupMethodCallArguments(StringBuilder stringBuilder, PropertyInfo[] propertyInfos)
+    {
+        for (var i = 0; i < propertyInfos.Length; i++)
+        {
+            var propertyInfo = propertyInfos[i];
+            stringBuilder.Append(propertyInfo.GetArgumentName());
+
+            if (i != propertyInfos.Length - 1)
+            {
+                stringBuilder.Append(", ");
+            }
+        }  
+    }
+    
     public static string VariantToTypeName(Variant.Type type, string className) =>
         type switch
         {
-            Variant.Type.Aabb => "Godot.Aabb",
-            Variant.Type.Basis => "Godot.Basis",
-            Variant.Type.Callable => "Godot.Callable",
-            Variant.Type.Color => "Godot.Color",
-            Variant.Type.NodePath => "Godot.NodePath",
-            Variant.Type.Plane => "Godot.Plane",
-            Variant.Type.Projection => "Godot.Projection",
-            Variant.Type.Quaternion => "Godot.Quaternion",
-            Variant.Type.Rect2 => "Godot.Rect2",
-            Variant.Type.Rect2I => "Godot.Rect2I",
-            Variant.Type.Rid => "Godot.Rid",
-            Variant.Type.Signal => "Godot.Signal",
-            Variant.Type.StringName => "Godot.StringName",
-            Variant.Type.Transform2D => "Godot.Transform2D",
-            Variant.Type.Transform3D => "Godot.Transform3D",
-            Variant.Type.Vector2 => "Godot.Vector2",
-            Variant.Type.Vector2I => "Godot.Vector2I",
-            Variant.Type.Vector3 => "Godot.Vector3",
-            Variant.Type.Vector3I => "Godot.Vector3I",
-            Variant.Type.Vector4 => "Godot.Vector4",
-            Variant.Type.Vector4I => "Godot.Vector4I",
-            Variant.Type.Nil => "Godot.Variant",
+            Variant.Type.Aabb => "Aabb",
+            Variant.Type.Basis => "Basis",
+            Variant.Type.Callable => "Callable",
+            Variant.Type.Color => "Color",
+            Variant.Type.NodePath => "NodePath",
+            Variant.Type.Plane => "Plane",
+            Variant.Type.Projection => "Projection",
+            Variant.Type.Quaternion => "Quaternion",
+            Variant.Type.Rect2 => "Rect2",
+            Variant.Type.Rect2I => "Rect2I",
+            Variant.Type.Rid => "Rid",
+            Variant.Type.Signal => "Signal",
+            Variant.Type.StringName => "StringName",
+            Variant.Type.Transform2D => "Transform2D",
+            Variant.Type.Transform3D => "Transform3D",
+            Variant.Type.Vector2 => "Vector2",
+            Variant.Type.Vector2I => "Vector2I",
+            Variant.Type.Vector3 => "Vector3",
+            Variant.Type.Vector3I => "Vector3I",
+            Variant.Type.Vector4 => "Vector4",
+            Variant.Type.Vector4I => "Vector4I",
+            Variant.Type.Nil => "void",
             Variant.Type.PackedByteArray => "byte[]",
             Variant.Type.PackedInt32Array => "int[]",
             Variant.Type.PackedInt64Array => "long",
             Variant.Type.PackedFloat32Array => "float[]",
             Variant.Type.PackedFloat64Array => "double[]",
             Variant.Type.PackedStringArray => "string[]",
-            Variant.Type.PackedVector2Array => "Godot.Vector2[]",
-            Variant.Type.PackedVector3Array => "Godot.Vector3[]",
-            Variant.Type.PackedColorArray => "Godot.Color[]",
+            Variant.Type.PackedVector2Array => "Vector2[]",
+            Variant.Type.PackedVector3Array => "Vector3[]",
+            Variant.Type.PackedColorArray => "Color[]",
             Variant.Type.Bool => "bool",
             Variant.Type.Int => "int",
             Variant.Type.Float => "float",
@@ -279,8 +521,17 @@ internal static partial class CodeGenerator
     [GeneratedRegex(@"[^a-zA-Z0-9_]")]
     private static partial Regex EscapeNameRegex();
     
-    public static string EscapeAndFormatName(string sourceName) => 
-        EscapeNameRegex()
+    public static string EscapeAndFormatName(string sourceName, bool camelCase = false)
+    {
+        var pascalCaseName = EscapeNameRegex()
             .Replace(sourceName, "_")
             .ToPascalCase();
+
+        if (camelCase && pascalCaseName.Length > 0)
+        {
+            pascalCaseName = pascalCaseName[..1].ToLowerInvariant() + pascalCaseName[1..];
+        }  
+        
+        return pascalCaseName;
+    }
 }

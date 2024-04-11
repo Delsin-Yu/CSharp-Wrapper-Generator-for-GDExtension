@@ -23,7 +23,7 @@ internal static partial class CodeGenerator
         for (var index = 0; index < gdeTypeNames.Length; index++)
         {
             var gdeTypeInfo = classInheritanceMap[gdeTypeNames[index]];
-            generateTasks[index] = Task.Run(() => GenerateSourceCodeForType(gdeTypeInfo, classNameMap, godotBuiltinTypeNames));
+            generateTasks[index] = Task.Run(() => GenerateSourceCodeForType(gdeTypeInfo, classNameMap, classInheritanceMap, godotBuiltinTypeNames));
         }
 
         var whenAll = Task.WhenAll(generateTasks);

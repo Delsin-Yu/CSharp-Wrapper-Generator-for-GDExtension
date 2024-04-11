@@ -1,18 +1,7 @@
-using System;
 using Godot;
 
-namespace GDExtension.RefCountedWrappers;
+namespace GDExtension.NodeWrappers;
 
-public class JoltPhysicsDirectBodyState3D : IDisposable
+public partial class JoltPhysicsDirectBodyState3D : PhysicsDirectBodyState3DExtension
 {
-
-    protected virtual RefCounted Construct() =>
-        (RefCounted)ClassDB.Instantiate("JoltPhysicsDirectBodyState3D");
-
-    protected readonly RefCounted _backing;
-
-    public JoltPhysicsDirectBodyState3D() => _backing = Construct();
-
-    public void Dispose() => _backing.Dispose();
-
 }

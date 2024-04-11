@@ -1,18 +1,13 @@
-using System;
 using Godot;
 
-namespace GDExtension.RefCountedWrappers;
+namespace GDExtension.NodeWrappers;
 
-public class Summator : IDisposable
+public partial class Summator : RefCounted
 {
+    public void Add(int value) => Call("add", value);
 
-    protected virtual RefCounted Construct() =>
-        (RefCounted)ClassDB.Instantiate("Summator");
+    public void Reset() => Call("reset");
 
-    protected readonly RefCounted _backing;
-
-    public Summator() => _backing = Construct();
-
-    public void Dispose() => _backing.Dispose();
+    public int GetTotal() => Call("get_total").As<int>();
 
 }

@@ -11,4 +11,6 @@ public class JoltJointGizmoPlugin3D
         _backing = backing;
     }
 
+    public void RedrawGizmos() => _backing.Call("redraw_gizmos");
+
 }

@@ -25,4 +25,6 @@ public class GDCubismParameter : GDCubismValueAbs
         set => _backing.Set("default_value", Variant.From(value));
     }
 
+    public void Reset() => _backing.Call("reset");
+
 }
