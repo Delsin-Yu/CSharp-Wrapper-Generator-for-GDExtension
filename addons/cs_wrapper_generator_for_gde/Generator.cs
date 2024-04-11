@@ -118,11 +118,7 @@ internal static partial class Generator
 
         var matchResult = GetExtractClassNameRegex().Match(resultString);
 
-        if (!matchResult.Success)
-        {
-            Directory.Delete(tempPath, true);
-            return;
-        }
+        if (!matchResult.Success) return;
 
         var builtinClassTypes = matchResult
             .Groups["ClassNames"]
@@ -132,7 +128,7 @@ internal static partial class Generator
 
 
         var currentClassTypes = ClassDB.GetClassList();
-        var diffType = currentClassTypes.Except(builtinClassTypes).Where(x=>ClassDB.CanInstantiate(x)).ToHashSet();
+        var diffType = currentClassTypes.Except(builtinClassTypes).Where(x => ClassDB.CanInstantiate(x)).ToHashSet();
         foreach (var gdeClassNames in diffType)
         {
             GD.Print($"ClassNames:{gdeClassNames} IsClassEnabled:{ClassDB.IsClassEnabled(gdeClassNames)} GetParentClass:{ClassDB.GetParentClass(gdeClassNames)}");
