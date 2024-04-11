@@ -21,7 +21,7 @@ internal static partial class TypeCollector
         GD.Print($"Godot Core ClassDB Dump script path: {scriptFullPath}");
         var dummyProjectPath = CreateDummyProject(tempPath);
         GD.Print($"Dummy Project path: {dummyProjectPath}");
-        var godotExecutablePath = CopyGodotExecutable(Environment.ProcessPath!, tempPath);
+        var godotExecutablePath = Environment.ProcessPath!;
         GD.Print($"Godot Executable path: {godotExecutablePath}");
         string[] dumpGodotClassCommands = ["--headless", "--script", scriptFullPath, "--editor", "--verbose", "--path", dummyProjectPath];
 
@@ -105,37 +105,6 @@ internal static partial class TypeCollector
         return dummyProjectPath;
     }
     
-    private static string CopyGodotExecutable(string godotExecutablePath, string tempPath)
-    {
-        var godotExecutableDir = Path.GetDirectoryName(godotExecutablePath)!;
-        var allGodotExecutableFiles = Directory.GetFiles(godotExecutableDir, "*.*", SearchOption.AllDirectories);
-        var copyTasks = new Task[allGodotExecutableFiles.Length];
-        for (var i = 0; i < allGodotExecutableFiles.Length; i++)
-        {
-            var sourcePath = allGodotExecutableFiles[i];
-            copyTasks[i] = Task.Run(
-                () =>
-                {
-                    var relativePath = Path.GetRelativePath(godotExecutableDir, sourcePath);
-                    var destPath = Path.Combine(tempPath, relativePath);
-                    var destDir = Path.GetDirectoryName(destPath)!;
-                    if (!Directory.Exists(destDir))
-                    {
-#if GODOT_OSX || GODOT_LINUXBSD
-                        Directory.CreateDirectory(destDir!, UnixFileMode.UserExecute);
-#else
-                        Directory.CreateDirectory(destDir!);
-#endif
-                    }
-
-                    File.Copy(sourcePath, destPath);
-                }
-            );
-        }
-
-        Task.WhenAll(copyTasks).Wait();
-        return Path.Combine(tempPath, Path.GetFileName(godotExecutablePath));
-    }
     
     private static bool ExtractClassNamesFromStdOut(string resultString, out HashSet<string> builtinClassTypes)
     {
