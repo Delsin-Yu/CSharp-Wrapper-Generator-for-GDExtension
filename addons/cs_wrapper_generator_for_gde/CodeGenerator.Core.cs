@@ -10,15 +10,16 @@ internal static partial class CodeGenerator
 {
     private static (string fileName, string fileContent) GenerateSourceCodeForType(
         ClassInfo gdeTypeInfo,
-        IReadOnlyDictionary<string, string> godotSharpTypeNameMap
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        ICollection<string> godotBuiltinClassNames
+
     )
     {
-        var isResource = ContainsParent(gdeTypeInfo, nameof(Resource));
-
         var codeBuilder = new StringBuilder();
 
-        if (isResource) GenerateCodeForResource(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap);
-        else GenerateCodeForNode(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap);
+        if (ContainsParent(gdeTypeInfo, nameof(Resource))) GenerateCodeForResource(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap, godotBuiltinClassNames);
+        else if (ContainsParent(gdeTypeInfo, nameof(Node))) GenerateCodeForNode(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap);
+        else GenerateCodeForRefCounted(codeBuilder, gdeTypeInfo, godotSharpTypeNameMap, godotBuiltinClassNames);
 
         return ($"{gdeTypeInfo.TypeName}.gdextension.cs", codeBuilder.ToString());
     }
@@ -34,9 +35,10 @@ internal static partial class CodeGenerator
         }
     }
 
-    private const string FILE_INDENTATION = "    ";
+    private const string IDNT = "    ";
+    private const string NAMESPACE_RES = "GDExtension.ResourcesWrappers";
+    private const string NAMESPACE_RC = "GDExtension.RefCountedWrappers";
     private const string NAMESPACE_NODE = "GDExtension.NodeWrappers";
-    private const string NAMESPACE_RES = "GDExtension.ResourceWrappers";
 
     private static void GenerateCodeForNode(
         StringBuilder codeBuilder,
@@ -63,10 +65,75 @@ internal static partial class CodeGenerator
         codeBuilder.Append('}');
     }
 
+    private static void GenerateCodeForRefCounted(
+        StringBuilder codeBuilder,
+        ClassInfo gdeTypeInfo,
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        ICollection<string> godotBuiltinClassNames
+    )
+    {
+        var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
+        var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
+        
+        const string backingName = "_backing";
+        const string constructMethodName = "Construct";
+        var refCountedName = nameof(RefCounted);
+
+        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == refCountedName || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
+
+        if (isRootWrapper)
+        {
+            codeBuilder.AppendLine(
+                $$"""
+                  using System;
+                  using Godot;
+
+                  namespace {{NAMESPACE_RC}};
+
+                  public class {{displayTypeName}} : IDisposable
+                  {
+                  
+                  {{IDNT}}protected virtual {{refCountedName}} {{constructMethodName}}() =>
+                  {{IDNT}}{{IDNT}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  
+                  {{IDNT}}protected readonly {{refCountedName}} {{backingName}};
+                  
+                  {{IDNT}}public {{displayTypeName}}() => {{backingName}} = {{constructMethodName}}();
+                  
+                  {{IDNT}}public void Dispose() => {{backingName}}.Dispose();
+
+                  """
+            );
+        }
+        else
+        {
+            codeBuilder.AppendLine(
+                $$"""
+                  using Godot;
+
+                  namespace {{NAMESPACE_RC}};
+
+                  public class {{displayTypeName}} : {{displayParentTypeName}}
+                  {
+
+                  {{IDNT}}protected override {{refCountedName}} {{constructMethodName}}() =>
+                  {{IDNT}}{{IDNT}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+
+                  """
+            );
+        }
+
+        ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        
+        codeBuilder.Append('}');
+    }
+
+    
     private static void GenerateCodeForResource(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
-        IReadOnlyDictionary<string, string> godotSharpTypeNameMap
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        ICollection<string> godotBuiltinClassNames
     )
     {
         var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
@@ -74,8 +141,9 @@ internal static partial class CodeGenerator
         
         const string backingName = "_backing";
         const string backingArgument = "backing";
+        var resourceName = nameof(Resource);
 
-        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == nameof(Resource);
+        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == resourceName || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
 
         if (isRootWrapper)
         {
@@ -87,12 +155,12 @@ internal static partial class CodeGenerator
 
                   public class {{displayTypeName}}
                   {
-                  {{FILE_INDENTATION}}protected readonly Resource {{backingName}};
+                  {{IDNT}}protected readonly {{resourceName}} {{backingName}};
 
-                  {{FILE_INDENTATION}}public {{displayTypeName}}({{nameof(Resource)}} {{backingArgument}})
-                  {{FILE_INDENTATION}}{
-                  {{FILE_INDENTATION}}{{FILE_INDENTATION}}{{backingName}} = {{backingArgument}};
-                  {{FILE_INDENTATION}}}
+                  {{IDNT}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
+                  {{IDNT}}{
+                  {{IDNT}}{{IDNT}}{{backingName}} = {{backingArgument}};
+                  {{IDNT}}}
 
                   """
             );
@@ -108,7 +176,7 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
                   
-                  {{FILE_INDENTATION}}public {{displayTypeName}}({{nameof(Resource)}} {{backingArgument}}) : base({{backingArgument}}) { }
+                  {{IDNT}}public {{displayTypeName}}({{resourceName}} {{backingArgument}}) : base({{backingArgument}}) { }
 
                   """
             );
@@ -152,17 +220,18 @@ internal static partial class CodeGenerator
             godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
 
             stringBuilder
-                .Append(FILE_INDENTATION)
+                .AppendLine(IDNT + "//" + propertyDictionary)
+                .Append(IDNT)
                 .AppendLine($"public {typeName} {nameValue.ToPascalCase()}")
-                .Append(FILE_INDENTATION)
+                .Append(IDNT)
                 .AppendLine("{")
-                .Append(FILE_INDENTATION)
-                .Append(FILE_INDENTATION)
+                .Append(IDNT)
+                .Append(IDNT)
                 .AppendLine($"""get => ({typeName}){backing}Get("{nameValue}");""")
-                .Append(FILE_INDENTATION)
-                .Append(FILE_INDENTATION)
+                .Append(IDNT)
+                .Append(IDNT)
                 .AppendLine($"""set => {backing}Set("{nameValue}", Variant.From(value));""")
-                .Append(FILE_INDENTATION)
+                .Append(IDNT)
                 .AppendLine("}")
                 .AppendLine();
             

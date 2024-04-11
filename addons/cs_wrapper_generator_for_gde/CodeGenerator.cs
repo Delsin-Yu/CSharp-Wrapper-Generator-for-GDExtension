@@ -8,7 +8,7 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class CodeGenerator
 {
-    internal static (string fileName, string fileContent)[] GenerateWrappersForGDETypes(string[] gdeTypeNames)
+    internal static (string fileName, string fileContent)[] GenerateWrappersForGDETypes(string[] gdeTypeNames, ICollection<string> godotBuiltinTypeNames)
     {
         var classNameMap = GetGodotSharpTypeNameMap();
         var classInheritanceMap = new Dictionary<string, ClassInfo>();
@@ -23,7 +23,7 @@ internal static partial class CodeGenerator
         for (var index = 0; index < gdeTypeNames.Length; index++)
         {
             var gdeTypeInfo = classInheritanceMap[gdeTypeNames[index]];
-            generateTasks[index] = Task.Run(() => GenerateSourceCodeForType(gdeTypeInfo, classNameMap));
+            generateTasks[index] = Task.Run(() => GenerateSourceCodeForType(gdeTypeInfo, classNameMap, godotBuiltinTypeNames));
         }
 
         var whenAll = Task.WhenAll(generateTasks);

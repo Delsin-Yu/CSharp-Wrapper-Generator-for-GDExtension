@@ -11,9 +11,10 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class TypeCollector
 {
-    public static bool TryCollectGDExtensionTypes(out string[] gdeClassTypes)
+    public static bool TryCollectGDExtensionTypes(out string[] gdeClassTypes, out ICollection<string> godotBuiltinTypeNames)
     {
         gdeClassTypes = null;
+        godotBuiltinTypeNames = null;
         var tempPath = CreateTempDirectory();
         GD.Print($"Temp workspace directory: {tempPath}");
         var scriptFullPath = CreateDumpDBScript(tempPath);
@@ -54,6 +55,7 @@ internal static partial class TypeCollector
             return false;
         }
         var currentClassTypes = ClassDB.GetClassList();
+        godotBuiltinTypeNames = builtinClassTypes;
         gdeClassTypes = currentClassTypes
             .Except(builtinClassTypes)
             .Where(x => ClassDB.CanInstantiate(x))

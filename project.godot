@@ -12,7 +12,7 @@ config_version=5
 
 config/name="GDExtensionAPIGenerator"
 run/main_scene="res://main.tscn"
-config/features=PackedStringArray("4.3", "C#", "Forward Plus")
+config/features=PackedStringArray("4.2", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 
 [dotnet]
@@ -22,3 +22,7 @@ project/assembly_name="GDExtensionAPIGenerator"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/cs_wrapper_generator_for_gde/plugin.cfg")
+
+[physics]
+
+3d/physics_engine="JoltPhysics3D"
