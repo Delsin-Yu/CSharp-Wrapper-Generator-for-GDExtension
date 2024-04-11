@@ -1,6 +1,6 @@
 using Godot;
 
-namespace GDExtension.Wrappers;
+namespace GDExtension.NodeWrappers;
 
 public partial class GDCubismEffectHitArea : GDCubismEffect
 {
@@ -9,4 +9,5 @@ public partial class GDCubismEffectHitArea : GDCubismEffect
         get => (bool)Get("monitoring");
         set => Set("monitoring", Variant.From(value));
     }
+
 }

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace GDExtension.Wrappers;
+namespace GDExtension.NodeWrappers;
 
 public partial class GDCubismEffectEyeBlink : GDCubismEffect
 {

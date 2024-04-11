@@ -1,6 +1,6 @@
 using Godot;
 
-namespace GDExtension.Wrappers;
+namespace GDExtension.NodeWrappers;
 
 public partial class GDCubismEffect : Node
 {
@@ -9,4 +9,5 @@ public partial class GDCubismEffect : Node
         get => (bool)Get("active");
         set => Set("active", Variant.From(value));
     }
+
 }
