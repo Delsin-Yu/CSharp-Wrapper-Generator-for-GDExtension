@@ -1,4 +1,3 @@
-using System.Globalization;
 using GDExtension.Wrappers;
 using Godot;
 

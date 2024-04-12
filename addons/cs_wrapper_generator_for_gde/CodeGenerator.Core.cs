@@ -103,8 +103,9 @@ internal static partial class CodeGenerator
               {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Construct()
               {{TAB1}}{
               {{TAB2}}var instance = ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").As<{{baseType}}>();
+              {{TAB2}}var instanceId = instance.GetInstanceId();
               {{TAB2}}instance.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
-              {{TAB2}}return instance.GetScript().As<{{displayTypeName}}>();
+              {{TAB2}}return ({{displayTypeName}})InstanceFromId(instanceId);
               {{TAB1}}}
               
               """
@@ -795,8 +796,9 @@ internal static partial class CodeGenerator
                 break;
             case BaseType.Node:
                 builder.Append($"""
+                                {tab}var instanceId = {backingName}.GetInstanceId();
                                 {tab}{backingName}.SetScript(ResourceLoader.Load("{GeneratorMain.GetWrapperPath(targetType)}"));
-                                {tab}var {targetArgumentName} = {backingName}.GetScript().As<{targetType}>();
+                                {tab}var {targetArgumentName} = ({targetType})GodotObject.InstanceFromId(instanceId);
                                 
                                 """);
                 break;
