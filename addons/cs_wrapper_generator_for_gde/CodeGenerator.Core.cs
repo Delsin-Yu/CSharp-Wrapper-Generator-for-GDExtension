@@ -80,12 +80,16 @@ internal static partial class CodeGenerator
         var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
         
         var baseType = GetParentGDERootParent(gdeTypeInfo, godotBuiltinClassNames);
+        
         var isRootWrapper = gdeTypeInfo.ParentType.TypeName == baseType || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
 
+        baseType = godotSharpTypeNameMap.GetValueOrDefault(baseType, baseType);
+        
         var newKeyWord = isRootWrapper ? string.Empty : "new ";
         
         codeBuilder.AppendLine(
             $$"""
+              using System;
               using Godot;
 
               namespace {{NAMESPACE}};
@@ -93,9 +97,12 @@ internal static partial class CodeGenerator
               public partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
               
+              {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{baseType}}), please use the Construct() method instead.")]
+              {{TAB1}}protected {{displayTypeName}}() { }
+              
               {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Construct()
               {{TAB1}}{
-              {{TAB2}}var instance = ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").As<{{displayParentTypeName}}>();
+              {{TAB2}}var instance = ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").As<{{baseType}}>();
               {{TAB2}}instance.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
               {{TAB2}}return instance.GetScript().As<{{displayTypeName}}>();
               {{TAB1}}}
@@ -159,6 +166,10 @@ internal static partial class CodeGenerator
                   
                   """
             );
+            
+            // Free?
+            // {{TAB1}}public void Free() => {{backingName}}.Free();
+
         }
         else
         {
@@ -205,10 +216,6 @@ internal static partial class CodeGenerator
         var signalInfoList = CollectSignalInfo(gdeTypeInfo);
         var enumInfoList = CollectionEnumInfo(gdeTypeInfo);
         var occupiedNames = new HashSet<string>();
-        occupiedNames.UnionWith(propertyInfoList.Select(x => x.GetPropertyName()));
-        occupiedNames.UnionWith(methodInfoList.Select(x => x.GetMethodName()));
-        occupiedNames.UnionWith(signalInfoList.Select(x => x.GetMethodName()));
-        occupiedNames.UnionWith(enumInfoList);
         ConstructEnums(occupiedNames, enumInfoList, codeBuilder, gdeTypeInfo);
         ConstructSignals(occupiedNames, signalInfoList, codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
         ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
@@ -310,6 +317,10 @@ internal static partial class CodeGenerator
             {
                 enumFormatName += "Enum";
             }
+            else
+            {
+                occupiedNames.Add(enumFormatName);
+            }
             
             codeBuilder.Append($$"""
                                  {{TAB1}}public enum {{enumFormatName}}
@@ -375,6 +386,10 @@ internal static partial class CodeGenerator
             if (occupiedNames.Contains(signalName))
             {
                 signalName += "Signal";
+            }
+            else
+            {
+                occupiedNames.Add(signalName);
             }
             
             var signalDelegateName = $"{signalName}Handler";
@@ -565,7 +580,7 @@ internal static partial class CodeGenerator
     }
     
     private static void ConstructProperties(
-        HashSet<string> occupiedNames,
+        ICollection<string> occupiedNames,
         IReadOnlyList<PropertyInfo> propertyInfos,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         StringBuilder stringBuilder,
@@ -595,7 +610,11 @@ internal static partial class CodeGenerator
             {
                 propertyName += "Property";
             }
-            
+            else
+            {
+                occupiedNames.Add(propertyName);
+            }
+
             stringBuilder
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")
                 .AppendLine($"{TAB1}{{")
@@ -671,10 +690,14 @@ internal static partial class CodeGenerator
 
             var methodName = methodInfo.GetMethodName();
 
-            // if (occupiedNames.Contains(methodName))
-            // {
-            //     methodName += "Method";
-            // }
+            if (occupiedNames.Contains(methodName))
+            {
+                methodName += "Method";
+            }
+            else
+            {
+                occupiedNames.Add(methodName);
+            }
             
             stringBuilder
                 .Append($"{TAB1}public ")

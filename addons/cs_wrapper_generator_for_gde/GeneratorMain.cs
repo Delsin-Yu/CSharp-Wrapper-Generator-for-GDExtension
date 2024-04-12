@@ -11,10 +11,7 @@ internal static class GeneratorMain
     /// </summary>
     public const string WRAPPERS_PATH = "res://GDExtensionWrappers/";
     
-    /// <summary>
-    /// TODO: This file extension is too long, finding an alternative? 
-    /// </summary>
-    public const string WRAPPERS_EXT = ".gdextension.cs";
+    public const string WRAPPERS_EXT = ".cs";
 
     /// <summary>
     /// Gets the full path (starts from res://) for the given type name.
