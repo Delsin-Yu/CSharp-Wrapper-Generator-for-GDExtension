@@ -1,11 +1,18 @@
-[gd_scene load_steps=3 format=3 uid="uid://dslkkdbghu82w"]
+[gd_scene load_steps=4 format=3 uid="uid://dslkkdbghu82w"]
 
 [ext_resource type="Script" path="res://Test.cs" id="1_e24is"]
 [ext_resource type="Script" path="res://GDExtensionWrappers/GDCubismUserModel.cs" id="2_l5ob7"]
 
+[sub_resource type="GDCubismParameter" id="GDCubismParameter_qup6x"]
+minimum_value = 4.59051e-41
+maximum_value = 0.0
+default_value = 0.0
+value = 1.72554e-19
+
 [node name="Node" type="Node" node_paths=PackedStringArray("_gdCubismUserModel")]
 script = ExtResource("1_e24is")
 _gdCubismUserModel = NodePath("GDCubismUserModel")
+_gdCubismParameter = SubResource("GDCubismParameter_qup6x")
 
 [node name="GDCubismUserModel" type="GDCubismUserModel" parent="."]
 disable_3d = true

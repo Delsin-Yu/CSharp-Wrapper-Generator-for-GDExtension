@@ -163,6 +163,8 @@ internal static partial class CodeGenerator
                   
                   {{TAB1}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
+                  {{TAB1}}public static implicit operator {{baseType}}({{displayTypeName}} instance) => instance.{{backingName}};
+                  
                   {{TAB1}}public void Dispose() => {{backingName}}.Dispose();
                   
                   """
@@ -183,9 +185,15 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
 
+                  {{TAB1}}public {{displayTypeName}}() { }
+                  
+                  {{TAB1}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) : base({{backingArgument}}) { }
+                  
                   {{TAB1}}protected override {{baseType}} {{constructMethodName}}() =>
                   {{TAB2}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
 
+                  {{TAB1}}public static implicit operator {{baseType}}({{displayTypeName}} instance) => instance.{{backingName}};
+                  
                   """
             );
         }
