@@ -33,3 +33,5 @@ tests/metadata.json
 # Godot ignores
 GDTask/nupkg
 GDExtensionWrappers/
+
+*~*
