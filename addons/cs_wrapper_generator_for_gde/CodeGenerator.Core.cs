@@ -79,6 +79,11 @@ internal static partial class CodeGenerator
         var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
         var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
         
+        var baseType = GetParentGDERootParent(gdeTypeInfo, godotBuiltinClassNames);
+        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == baseType || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
+
+        var newKeyWord = isRootWrapper ? string.Empty : "new ";
+        
         codeBuilder.AppendLine(
             $$"""
               using Godot;
@@ -88,7 +93,7 @@ internal static partial class CodeGenerator
               public partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
               
-              {{TAB1}}public new static {{displayTypeName}} Construct()
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Construct()
               {{TAB1}}{
               {{TAB2}}var instance = ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").As<{{displayParentTypeName}}>();
               {{TAB2}}instance.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
