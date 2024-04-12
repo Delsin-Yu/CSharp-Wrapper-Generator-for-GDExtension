@@ -88,7 +88,7 @@ internal static partial class CodeGenerator
               public partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
               
-              {{TAB1}}public static {{displayTypeName}} Construct()
+              {{TAB1}}public new static {{displayTypeName}} Construct()
               {{TAB1}}{
               {{TAB2}}var instance = ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").As<{{displayParentTypeName}}>();
               {{TAB2}}instance.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
@@ -196,37 +196,99 @@ internal static partial class CodeGenerator
     )
     {
         var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
-        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructSignals(codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, gdeTypeInfo, backingName);
-        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
-        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, backingName);
+        var methodInfoList = CollectMethodInfo(gdeTypeInfo, propertyInfoList);
+        var signalInfoList = CollectSignalInfo(gdeTypeInfo);
+        var enumInfoList = CollectionEnumInfo(gdeTypeInfo);
+        var occupiedNames = new HashSet<string>();
+        occupiedNames.UnionWith(propertyInfoList.Select(x => x.GetPropertyName()));
+        occupiedNames.UnionWith(methodInfoList.Select(x => x.GetMethodName()));
+        occupiedNames.UnionWith(signalInfoList.Select(x => x.GetMethodName()));
+        occupiedNames.UnionWith(enumInfoList);
+        ConstructEnums(occupiedNames, enumInfoList, codeBuilder, gdeTypeInfo);
+        ConstructSignals(occupiedNames, signalInfoList, codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
+        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
+        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, codeBuilder, backingName);
     }
 
 
-    private static IReadOnlyList<PropertyInfo> CollectPropertyInfo(ClassInfo gdeTypeInfo)
-    {
-        var propertyList = ClassDB.ClassGetPropertyList(gdeTypeInfo.TypeName, true);
+    private static IReadOnlyList<PropertyInfo> CollectPropertyInfo(ClassInfo gdeTypeInfo) =>
+        ClassDB
+            .ClassGetPropertyList(gdeTypeInfo.TypeName, true)
+            .Select(
+                propertyDictionary =>
+                {
+                    var propertyInfo = new PropertyInfo(propertyDictionary);
+                    propertyDictionary.Dispose();
+                    return propertyInfo;
+                }
+            )
+            .ToArray();
 
-        var propertyInfoList = new List<PropertyInfo>();
-        
-        foreach (var propertyDictionary in propertyList)
-        {
-            var propertyInfo = new PropertyInfo(propertyDictionary);
-            propertyInfoList.Add(propertyInfo);
-            propertyDictionary.Dispose();
-        }
+    private static IReadOnlyList<MethodInfo> CollectMethodInfo(ClassInfo gdeTypeInfo, IReadOnlyList<PropertyInfo> propertyInfos) =>
+        ClassDB
+            .ClassGetMethodList(gdeTypeInfo.TypeName, true)
+            .Select(
+                x =>
+                {
+                    var methodInfo = new MethodInfo(x);
+                    x.Dispose();
+                    return methodInfo;
+                }
+            )
+            .Where(
+                methodInfo =>
+                {
+                    var methodNativeName = methodInfo.NativeName;
 
-        return propertyInfoList;
-    }
+                    if (methodNativeName.Length <= 4) return true;
+
+                    if (methodNativeName.StartsWith("get_") || methodNativeName.StartsWith(("set_")))
+                    {
+                        var trimmedNativeName = methodNativeName[4..];
+                        if (propertyInfos.Any(
+                                propertyInfo =>
+                                {
+                                    if (string.Equals(propertyInfo.NativeName, trimmedNativeName, StringComparison.OrdinalIgnoreCase))
+                                        return true;
+                                    if (string.Equals(propertyInfo.NativeName.Replace('/', '_'), trimmedNativeName, StringComparison.OrdinalIgnoreCase))
+                                        return true;
+                                    return false;
+                                }
+                            )) return false;
+                    }
+
+                    return true;
+                }
+            )
+            .ToArray();
+
+    private static IReadOnlyList<MethodInfo> CollectSignalInfo(ClassInfo gdeTypeInfo) =>
+        ClassDB
+            .ClassGetSignalList(gdeTypeInfo.TypeName, true)
+            .Select(
+                signalInfoDictionary =>
+                {
+                    var signalInfo = new MethodInfo(signalInfoDictionary);
+                    signalInfoDictionary.Dispose();
+                    return signalInfo;
+                }
+            )
+            .ToArray();
+
+    private static IReadOnlyList<string> CollectionEnumInfo(ClassInfo gdeTypeInfo) => 
+        ClassDB
+            .ClassGetEnumList(gdeTypeInfo.TypeName, true)
+            .Select(x => EscapeAndFormatName(x))
+            .ToArray();
     
     private static void ConstructEnums(
-        IReadOnlyList<PropertyInfo> propertyInfos,
+        ICollection<string> occupiedNames,
+        IReadOnlyList<string> enumList,
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo
-        )
+    )
     {
-        var enumList = ClassDB.ClassGetEnumList(gdeTypeInfo.TypeName, true);
-        if (enumList.Length != 0)
+        if (enumList.Count != 0)
         {
             codeBuilder.AppendLine("""
                                    #region Enums
@@ -239,7 +301,7 @@ internal static partial class CodeGenerator
         {
             var enumFormatName = EscapeAndFormatName(enumName);
             
-            if (propertyInfos.Any(x => x.GetPropertyName() == enumFormatName))
+            if (occupiedNames.Contains(enumFormatName))
             {
                 enumFormatName += "Enum";
             }
@@ -270,7 +332,7 @@ internal static partial class CodeGenerator
                 .AppendLine();
         }
 
-        if (enumList.Length != 0)
+        if (enumList.Count != 0)
         {
             codeBuilder.AppendLine("""
                                    #endregion
@@ -281,16 +343,15 @@ internal static partial class CodeGenerator
     }
 
     private static void ConstructSignals(
+        ICollection<string> occupiedNames,
+        IReadOnlyList<MethodInfo> signalList,
         StringBuilder codeBuilder,
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> builtinTypes,
-        ClassInfo gdeTypeInfo,
         string backingName
     )
     {
-        var signalList = ClassDB.ClassGetSignalList(gdeTypeInfo.TypeName, true);
-        
         if (signalList.Count != 0)
         {
             codeBuilder.AppendLine("""
@@ -299,14 +360,18 @@ internal static partial class CodeGenerator
                                    """
             );
         }
-        
-        foreach (var signalInfoDictionary in signalList)
-        {
-            var signalInfo = new MethodInfo(signalInfoDictionary);
 
+        foreach (var signalInfo in signalList)
+        {
             var returnValueName = GetReturnValueName(gdeTypeMap, signalInfo);
 
             var signalName = signalInfo.GetMethodName();
+
+            if (occupiedNames.Contains(signalName))
+            {
+                signalName += "Signal";
+            }
+            
             var signalDelegateName = $"{signalName}Handler";
             var signalNameCamelCase = ToCamelCase(signalName);
             var backingDelegateName = $"_{signalNameCamelCase}_backing";
@@ -319,8 +384,7 @@ internal static partial class CodeGenerator
             codeBuilder
                 .AppendLine(");")
                 .AppendLine();
-
-
+            
             const string callableName = nameof(Callable);
             
             codeBuilder.Append(
@@ -449,8 +513,6 @@ internal static partial class CodeGenerator
                     """
                 )
                 .AppendLine();
-            
-            signalInfoDictionary.Dispose();
         }
         
         if (signalList.Count != 0)
@@ -498,6 +560,7 @@ internal static partial class CodeGenerator
     }
     
     private static void ConstructProperties(
+        HashSet<string> occupiedNames,
         IReadOnlyList<PropertyInfo> propertyInfos,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         StringBuilder stringBuilder,
@@ -521,8 +584,15 @@ internal static partial class CodeGenerator
 
             godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
 
+            var propertyName = propertyInfo.GetPropertyName();
+
+            if (occupiedNames.Contains(propertyName))
+            {
+                propertyName += "Property";
+            }
+            
             stringBuilder
-                .AppendLine($"{TAB1}public {typeName} {propertyInfo.GetPropertyName()}")
+                .AppendLine($"{TAB1}public {typeName} {propertyName}")
                 .AppendLine($"{TAB1}{{")
                 .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
                 .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
@@ -570,53 +640,16 @@ internal static partial class CodeGenerator
     }
     
     private static void ConstructMethods(
-        ClassInfo gdeTypeInfo,
+        HashSet<string> occupiedNames,
+        IReadOnlyList<MethodInfo> methodInfoList,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         ICollection<string> builtinTypeNames,
-        IReadOnlyList<PropertyInfo> propertyInfos,
         StringBuilder stringBuilder,
         string backing
     )
     {
-        var methodInfoList = ClassDB
-            .ClassGetMethodList(gdeTypeInfo.TypeName, true)
-            .Select(
-                x =>
-                {
-                    var methodInfo = new MethodInfo(x);
-                    x.Dispose();
-                    return methodInfo;
-                }
-            )
-            .Where(
-                methodInfo =>
-                {
-                    var methodNativeName = methodInfo.NativeName;
-
-                    if (methodNativeName.Length <= 4) return true;
-
-                    if (methodNativeName.StartsWith("get_") || methodNativeName.StartsWith(("set_")))
-                    {
-                        var trimmedNativeName = methodNativeName[4..];
-                        if (propertyInfos.Any(
-                                propertyInfo =>
-                                {
-                                    if (string.Equals(propertyInfo.NativeName, trimmedNativeName, StringComparison.OrdinalIgnoreCase))
-                                        return true;
-                                    if (string.Equals(propertyInfo.NativeName.Replace('/', '_'), trimmedNativeName, StringComparison.OrdinalIgnoreCase))
-                                        return true;
-                                    return false;
-                                }
-                            )) return false;
-                    }
-
-                    return true;
-                }
-            )
-            .ToArray();
-
-        if (methodInfoList.Length != 0)
+        if (methodInfoList.Count != 0)
         {
             stringBuilder.AppendLine("""
                                      #region Methods
@@ -631,11 +664,18 @@ internal static partial class CodeGenerator
             var methodNativeName = methodInfo.NativeName;
             var returnValueName = GetReturnValueName(gdeTypeMap, methodInfo);
 
+            var methodName = methodInfo.GetMethodName();
+
+            // if (occupiedNames.Contains(methodName))
+            // {
+            //     methodName += "Method";
+            // }
+            
             stringBuilder
                 .Append($"{TAB1}public ")
                 .Append(returnValueName)
                 .Append(' ')
-                .Append(methodInfo.GetMethodName())
+                .Append(methodName)
                 .Append('(');
             
             BuildupMethodArguments(stringBuilder, methodInfo.Arguments);
@@ -679,7 +719,7 @@ internal static partial class CodeGenerator
         }
         
                 
-        if (methodInfoList.Length != 0)
+        if (methodInfoList.Count != 0)
         {
             stringBuilder.AppendLine("""
                                      #endregion
