@@ -91,11 +91,14 @@ internal static partial class CodeGenerator
               """
         );
 
-        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
-        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, string.Empty);
-        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, string.Empty);
-
+        GenerateMembers(
+            codeBuilder,
+            gdeTypeInfo,
+            gdeTypeMap,
+            godotSharpTypeNameMap,
+            godotBuiltinClassNames,
+            string.Empty
+        );
         codeBuilder.Append('}');
     }
 
@@ -168,10 +171,14 @@ internal static partial class CodeGenerator
             );
         }
 
-        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
-        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
-        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, $"{backingName}.");
+        GenerateMembers(
+            codeBuilder,
+            gdeTypeInfo,
+            gdeTypeMap,
+            godotSharpTypeNameMap,
+            godotBuiltinClassNames,
+            $"{backingName}."
+        );
         
         codeBuilder.Append('}');
     }
@@ -234,13 +241,34 @@ internal static partial class CodeGenerator
             );
         }
 
-        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
-        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
-        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, $"{backingName}.");
-        
+        GenerateMembers(
+            codeBuilder,
+            gdeTypeInfo,
+            gdeTypeMap,
+            godotSharpTypeNameMap,
+            godotBuiltinClassNames,
+            $"{backingName}."
+        );
+
         codeBuilder.Append('}');
     }
+
+    private static void GenerateMembers(
+        StringBuilder codeBuilder,
+        ClassInfo gdeTypeInfo,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        ICollection<string> godotBuiltinClassNames,
+        string backingName
+    )
+    {
+        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
+        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
+        ConstructSignals(codeBuilder, gdeTypeMap, gdeTypeInfo);
+        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
+        ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, backingName);
+    }
+
 
     private static IReadOnlyList<PropertyInfo> CollectPropertyInfo(ClassInfo gdeTypeInfo)
     {
@@ -306,6 +334,63 @@ internal static partial class CodeGenerator
         }
 
         if (enumList.Length != 0)
+        {
+            codeBuilder.AppendLine("""
+                                   #endregion
+
+                                   """
+            );
+        }
+    }
+
+    private static void ConstructSignals(
+        StringBuilder codeBuilder,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        ClassInfo gdeTypeInfo
+    )
+    {
+        var signalList = ClassDB.ClassGetSignalList(gdeTypeInfo.TypeName, true);
+        
+        if (signalList.Count != 0)
+        {
+            codeBuilder.AppendLine("""
+                                   #region Signals
+
+                                   """
+            );
+        }
+        
+        foreach (var signalInfoDictionary in signalList)
+        {
+            var signalInfo = new MethodInfo(signalInfoDictionary);
+
+            var returnValueName = GetReturnValueName(gdeTypeMap, signalInfo);
+
+            var signalDelegateName = $"{signalInfo.GetMethodName()}Handler";
+            
+            codeBuilder.Append($"{TAB}public delegate {returnValueName} {signalDelegateName}(");
+            
+            BuildupMethodArguments(codeBuilder, signalInfo.Arguments);
+
+            codeBuilder
+                .AppendLine(");")
+                .AppendLine();
+            
+            codeBuilder.AppendLine(
+                $$"""
+                {{TAB}}public event {{signalDelegateName}} {{signalInfo.GetMethodName()}}
+                {{TAB}}{
+                {{TAB}}{{TAB}}add => ;
+                {{TAB}}{{TAB}}remove => ;
+                {{TAB}}}
+                """
+                )
+                .AppendLine();
+            
+            signalInfoDictionary.Dispose();
+        }
+        
+        if (signalList.Count != 0)
         {
             codeBuilder.AppendLine("""
                                    #endregion
@@ -468,23 +553,9 @@ internal static partial class CodeGenerator
                         return false;
                     }
                 )) continue;
-            var returnValueName = methodInfo.ReturnValue.GetTypeName();
-            if (gdeTypeMap.TryGetValue(returnValueName, out var returnTypeInfo))
-            {
-                switch (returnTypeInfo.ParentType.TypeName)
-                {
-                    case nameof(Resource):
-                        returnValueName = $"{NAMESPACE_RES}.{returnValueName}";
-                        break;
-                    case nameof(Node):
-                        returnValueName = $"{NAMESPACE_NODE}.{returnValueName}";
-                        break;
-                    case nameof(RefCounted):
-                        returnValueName = $"{NAMESPACE_RC}.{returnValueName}";
-                        break;
-                }
-            }
             
+            var returnValueName = GetReturnValueName(gdeTypeMap, methodInfo);
+
             stringBuilder
                 .Append($"{TAB}public ")
                 .Append(returnValueName)
@@ -496,7 +567,7 @@ internal static partial class CodeGenerator
 
             stringBuilder.Append(") => ");
 
-            if (!methodInfo.ReturnValue.IsVoid && gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
+            if (!methodInfo.ReturnValue.IsVoid && gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
             {
                 stringBuilder.Append("new(");
             }
@@ -543,6 +614,28 @@ internal static partial class CodeGenerator
                                      """
             );
         }
+    }
+
+    private static string GetReturnValueName(IReadOnlyDictionary<string, ClassInfo> gdeTypeMap, MethodInfo methodInfo)
+    {
+        var returnValueName = methodInfo.ReturnValue.GetTypeName();
+        if (gdeTypeMap.TryGetValue(returnValueName, out var returnTypeInfo))
+        {
+            switch (returnTypeInfo.ParentType.TypeName)
+            {
+                case nameof(Resource):
+                    returnValueName = $"{NAMESPACE_RES}.{returnValueName}";
+                    break;
+                case nameof(Node):
+                    returnValueName = $"{NAMESPACE_NODE}.{returnValueName}";
+                    break;
+                case nameof(RefCounted):
+                    returnValueName = $"{NAMESPACE_RC}.{returnValueName}";
+                    break;
+            }
+        }
+
+        return returnValueName;
     }
 
     private static string GetRootParentType(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes) =>
