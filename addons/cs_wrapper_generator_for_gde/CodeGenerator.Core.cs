@@ -197,7 +197,7 @@ internal static partial class CodeGenerator
     {
         var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
         ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructSignals(codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, gdeTypeInfo,backingName);
+        ConstructSignals(codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, gdeTypeInfo, backingName);
         ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
         ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, backingName);
     }
@@ -238,7 +238,7 @@ internal static partial class CodeGenerator
         foreach (var enumName in enumList)
         {
             var enumFormatName = EscapeAndFormatName(enumName);
-
+            
             if (propertyInfos.Any(x => x.GetPropertyName() == enumFormatName))
             {
                 enumFormatName += "Enum";
@@ -255,10 +255,14 @@ internal static partial class CodeGenerator
             foreach (var enumConstant in enumConstants)
             {
                 var enumIntValue = ClassDB.ClassGetIntegerConstant(gdeTypeInfo.TypeName, enumConstant);
-                var enumValueFormatName = EscapeAndFormatName(enumConstant);
-                var index = enumValueFormatName.IndexOf(enumFormatName, StringComparison.Ordinal);
-                if (index != -1) enumValueFormatName = enumValueFormatName.Remove(index, enumFormatName.Length);
-                codeBuilder.AppendLine($"{TAB2}{enumValueFormatName} = {enumIntValue},");
+                
+                var formatEnumConstant = EscapeAndFormatName(enumConstant);
+                var index = formatEnumConstant.ToUpperInvariant().IndexOf(enumFormatName.ToUpperInvariant(), StringComparison.Ordinal);
+                if (index != -1) formatEnumConstant = formatEnumConstant.Remove(index, enumFormatName.Length);
+                
+                formatEnumConstant = EscapeAndFormatName(formatEnumConstant);
+
+                codeBuilder.AppendLine($"{TAB2}{formatEnumConstant} = {enumIntValue},");
             }
             
             codeBuilder
@@ -321,7 +325,7 @@ internal static partial class CodeGenerator
             
             codeBuilder.Append(
                 $$"""
-                  {{TAB1}}private {{signalDelegateName}}? {{backingDelegateName}};
+                  {{TAB1}}private {{signalDelegateName}} {{backingDelegateName}};
                   {{TAB1}}private {{callableName}} {{backingCallableName}};
                   {{TAB1}}public event {{signalDelegateName}} {{signalName}}
                   {{TAB1}}{
@@ -589,28 +593,25 @@ internal static partial class CodeGenerator
                 methodInfo =>
                 {
                     var methodNativeName = methodInfo.NativeName;
-                    return propertyInfos.Any(
-                        propertyInfo =>
-                        {
-                            var propertyNativeName = propertyInfo.NativeName;
-                            if (methodNativeName.Contains(propertyNativeName))
-                            {
-                                var index = methodNativeName.IndexOf(propertyNativeName, StringComparison.Ordinal);
-                                var spiltResult = methodNativeName.Remove(index, propertyNativeName.Length);
-                                if (spiltResult is "set_" or "get_") return false;
-                            }
 
-                            var propertyNativeNameEscaped = EscapeNameRegex().Replace(propertyNativeName, "_");
-                            if (methodNativeName.Contains(propertyNativeNameEscaped))
-                            {
-                                var index = methodNativeName.IndexOf(propertyNativeNameEscaped, StringComparison.Ordinal);
-                                var spiltResult = methodNativeName.Remove(index, propertyNativeNameEscaped.Length);
-                                if (spiltResult is "set_" or "get_") return false;
-                            }
+                    if (methodNativeName.Length <= 4) return true;
 
-                            return true;
-                        }
-                    );
+                    if (methodNativeName.StartsWith("get_") || methodNativeName.StartsWith(("set_")))
+                    {
+                        var trimmedNativeName = methodNativeName[4..];
+                        if (propertyInfos.Any(
+                                propertyInfo =>
+                                {
+                                    if (string.Equals(propertyInfo.NativeName, trimmedNativeName, StringComparison.OrdinalIgnoreCase))
+                                        return true;
+                                    if (string.Equals(propertyInfo.NativeName.Replace('/', '_'), trimmedNativeName, StringComparison.OrdinalIgnoreCase))
+                                        return true;
+                                    return false;
+                                }
+                            )) return false;
+                    }
+
+                    return true;
                 }
             )
             .ToArray();
@@ -837,6 +838,9 @@ internal static partial class CodeGenerator
 
     [GeneratedRegex(@"[^a-zA-Z0-9_]")]
     private static partial Regex EscapeNameRegex();
+    
+    [GeneratedRegex(@"[0-9]+")]
+    private static partial Regex EscapeNameDigitRegex();
 
     private static readonly HashSet<string> _csKeyword =
     [
@@ -854,19 +858,17 @@ internal static partial class CodeGenerator
     
     public static string EscapeAndFormatName(string sourceName, bool camelCase = false)
     {
-        var pascalCaseName = EscapeNameRegex()
+        var name = EscapeNameRegex()
             .Replace(sourceName, "_")
             .ToPascalCase();
-
-        if (camelCase)
-        {
-            pascalCaseName = ToCamelCase(pascalCaseName);
-        }
-        if (_csKeyword.Contains(pascalCaseName))
-        {
-            pascalCaseName = $"@{pascalCaseName}";
-        }
-        return pascalCaseName;
+        
+        if (camelCase) name = ToCamelCase(name);
+        
+        if (_csKeyword.Contains(name)) name = $"@{name}";
+        
+        if (EscapeNameDigitRegex().IsMatch(name[..1])) name = $"_{name}";
+        
+        return name;
     }
 
     public static string ToCamelCase(string sourceName)
