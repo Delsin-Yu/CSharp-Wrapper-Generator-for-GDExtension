@@ -197,7 +197,7 @@ internal static partial class CodeGenerator
     {
         var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
         ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructSignals(codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, gdeTypeInfo);
+        ConstructSignals(codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, gdeTypeInfo,backingName);
         ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
         ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, backingName);
     }
@@ -281,7 +281,8 @@ internal static partial class CodeGenerator
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> builtinTypes,
-        ClassInfo gdeTypeInfo
+        ClassInfo gdeTypeInfo,
+        string backingName
     )
     {
         var signalList = ClassDB.ClassGetSignalList(gdeTypeInfo.TypeName, true);
@@ -426,7 +427,7 @@ internal static partial class CodeGenerator
                     $$"""
                     {{TAB5}}}
                     {{TAB4}});
-                    {{TAB4}}Connect("{{signalInfo.NativeName}}", {{backingCallableName}});
+                    {{TAB4}}{{backingName}}Connect("{{signalInfo.NativeName}}", {{backingCallableName}});
                     {{TAB3}}}
                     {{TAB3}}{{backingDelegateName}} += value;
                     {{TAB2}}}
@@ -436,7 +437,7 @@ internal static partial class CodeGenerator
                     {{TAB3}}
                     {{TAB3}}if({{backingDelegateName}} == null)
                     {{TAB3}}{
-                    {{TAB4}}Disconnect("{{signalInfo.NativeName}}", {{backingCallableName}});
+                    {{TAB4}}{{backingName}}Disconnect("{{signalInfo.NativeName}}", {{backingCallableName}});
                     {{TAB4}}{{backingCallableName}} = default;
                     {{TAB3}}}
                     {{TAB2}}}
