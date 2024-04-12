@@ -126,6 +126,8 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : IDisposable
                   {
                   
+                  {{TAB}}public static implicit operator Variant({{displayTypeName}} refCount) => refCount.{{backingName}};
+                  
                   {{TAB}}protected virtual {{refCountedName}} {{constructMethodName}}() =>
                   {{TAB}}{{TAB}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
                   
@@ -139,7 +141,6 @@ internal static partial class CodeGenerator
                   {{TAB}}private {{displayTypeName}}({{refCountedName}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
                   {{TAB}}public void Dispose() => {{backingName}}.Dispose();
-
                   """
             );
         }
@@ -195,6 +196,9 @@ internal static partial class CodeGenerator
 
                   public class {{displayTypeName}}
                   {
+                  
+                  {{TAB}}public static implicit operator Variant({{displayTypeName}} resource) => resource.{{backingName}};
+                  
                   {{TAB}}protected readonly {{resourceName}} {{backingName}};
 
                   {{TAB}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
@@ -364,10 +368,26 @@ internal static partial class CodeGenerator
                         return false;
                     }
                 )) continue;
+            var returnValueName = methodInfo.ReturnValue.GetTypeName();
+            if (gdeTypeMap.TryGetValue(returnValueName, out var returnTypeInfo))
+            {
+                switch (returnTypeInfo.ParentType.TypeName)
+                {
+                    case nameof(Resource):
+                        returnValueName = $"{NAMESPACE_RES}.{returnValueName}";
+                        break;
+                    case nameof(Node):
+                        returnValueName = $"{NAMESPACE_NODE}.{returnValueName}";
+                        break;
+                    case nameof(RefCounted):
+                        returnValueName = $"{NAMESPACE_RC}.{returnValueName}";
+                        break;
+                }
+            }
             
             stringBuilder
                 .Append($"{TAB}public ")
-                .Append(methodInfo.ReturnValue.GetTypeName())
+                .Append(returnValueName)
                 .Append(' ')
                 .Append(methodInfo.GetMethodName())
                 .Append('(');
@@ -376,7 +396,7 @@ internal static partial class CodeGenerator
 
             stringBuilder.Append(") => ");
 
-            if (!methodInfo.ReturnValue.IsVoid && gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
+            if (!methodInfo.ReturnValue.IsVoid && gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
             {
                 stringBuilder.Append("new(");
             }
@@ -520,6 +540,19 @@ internal static partial class CodeGenerator
 
     [GeneratedRegex(@"[^a-zA-Z0-9_]")]
     private static partial Regex EscapeNameRegex();
+    private static HashSet<string> _csharp_keyword = new HashSet<string>()
+    {
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const",
+        "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event", "explicit", "extern",
+        "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int", "interface",
+        "internal", "is", "lock", "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
+        "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc",
+        "static", "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked",
+        "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
+        "string", "object", "var", "dynamic", "yield", "add", "alias", "ascending", "async", "await", "by",
+        "descending", "equals", "from", "get", "global", "group", "into", "join", "let", "nameof", "on", "orderby",
+        "partial", "remove", "select", "set","when", "where", "yield",
+    };
     
     public static string EscapeAndFormatName(string sourceName, bool camelCase = false)
     {
@@ -530,8 +563,11 @@ internal static partial class CodeGenerator
         if (camelCase && pascalCaseName.Length > 0)
         {
             pascalCaseName = pascalCaseName[..1].ToLowerInvariant() + pascalCaseName[1..];
-        }  
-        
+        }
+        if (_csharp_keyword.Contains(pascalCaseName))
+        {
+            pascalCaseName = $"@{pascalCaseName}";
+        }
         return pascalCaseName;
     }
 }
