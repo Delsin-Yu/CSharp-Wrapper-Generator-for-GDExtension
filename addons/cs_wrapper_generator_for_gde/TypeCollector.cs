@@ -13,6 +13,12 @@ internal static partial class TypeCollector
 {
     public static bool TryCollectGDExtensionTypes(out string[] gdeClassTypes, out ICollection<string> godotBuiltinTypeNames)
     {
+        // The builtin types are obtained by creating & launching an empty project,
+        // and make the Godot Editor execute a custom GDScript that prints every types
+        // from the ClassDB, and parse the final StandardOutput when finish,
+        // it's a dumb approach, but this is the only way we succeed.
+        
+        
         gdeClassTypes = null;
         godotBuiltinTypeNames = null;
         var tempPath = CreateTempDirectory();
@@ -36,6 +42,7 @@ internal static partial class TypeCollector
         string resultString;
         using (var result = new Godot.Collections.Array())
         {
+            // We use os instead of dotnet process here because the latter one does not working properly.
             OS.Execute(godotExecutablePath, dumpGodotClassCommands, result);
             Directory.Delete(tempPath, true);
             try
@@ -54,6 +61,11 @@ internal static partial class TypeCollector
             GD.PrintErr("Error when extracting builtin class names!");
             return false;
         }
+
+        // GDExtension types are the difference
+        // between the builtin types and the types
+        // existing in the current project's ClassDB. 
+        
         var currentClassTypes = ClassDB.GetClassList();
         godotBuiltinTypeNames = builtinClassTypes;
         gdeClassTypes = currentClassTypes

@@ -10,9 +10,18 @@ internal static partial class CodeGenerator
 {
     internal static (string fileName, string fileContent)[] GenerateWrappersForGDETypes(string[] gdeTypeNames, ICollection<string> godotBuiltinTypeNames)
     {
+        // Certain types are named differently in C#,
+        // such as GodotObject(C#) vs Object(Native),
+        // here we create a map for converting the
+        // native type name to C# type name.
+        
         var classNameMap = GetGodotSharpTypeNameMap();
         var classInheritanceMap = new Dictionary<string, ClassInfo>();
 
+        // We need to know the inheritance of the
+        // GDExtension types for correctly generate
+        // wrappers for them.
+        
         foreach (var gdeTypeName in gdeTypeNames)
         {
             GenerateClassInheritanceMap(gdeTypeName, classInheritanceMap);
@@ -20,6 +29,8 @@ internal static partial class CodeGenerator
 
         var generateTasks = new Task<(string, string)>[gdeTypeNames.Length];
 
+        // Run all the generate logic in parallel.
+        
         for (var index = 0; index < gdeTypeNames.Length; index++)
         {
             var gdeTypeInfo = classInheritanceMap[gdeTypeNames[index]];

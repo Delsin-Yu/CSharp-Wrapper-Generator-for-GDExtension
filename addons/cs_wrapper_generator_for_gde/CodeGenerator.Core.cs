@@ -20,11 +20,10 @@ internal static partial class CodeGenerator
     {
         var codeBuilder = new StringBuilder();
 
+        // We have three ways for generating wrappers. 
+        
         switch (GetBaseType(gdeTypeInfo))
         {
-            case BaseType.Resource:
-                GenerateCodeForResource(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
-                break;
             case BaseType.Other:
                 GenerateCodeForOther(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
                 break;
@@ -40,14 +39,12 @@ internal static partial class CodeGenerator
     
     private enum BaseType
     {
-        Resource,
         Other,
         Node
     }
 
     private static BaseType GetBaseType(ClassInfo classInfo)
     {
-        if (ContainsParent(classInfo, nameof(Resource))) return BaseType.Resource;
         if (ContainsParent(classInfo, nameof(Node))) return BaseType.Node;
         return BaseType.Other;
     }
@@ -69,9 +66,7 @@ internal static partial class CodeGenerator
     private const string TAB4 = TAB2 + TAB2;
     private const string TAB5 = TAB4 + TAB1;
     private const string TAB6 = TAB3 + TAB3;
-    private const string NAMESPACE_RES = "GDExtension.ResourcesWrappers";
-    private const string NAMESPACE_RC = "GDExtension.RefCountedWrappers";
-    private const string NAMESPACE_NODE = "GDExtension.NodeWrappers";
+    private const string NAMESPACE = "GDExtension.Wrappers";
 
     private static void GenerateCodeForNode(
         StringBuilder codeBuilder,
@@ -88,10 +83,17 @@ internal static partial class CodeGenerator
             $$"""
               using Godot;
 
-              namespace {{NAMESPACE_NODE}};
+              namespace {{NAMESPACE}};
 
               public partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
+              
+              {{TAB1}}public static {{displayTypeName}} Construct()
+              {{TAB1}}{
+              {{TAB2}}var instance = ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").As<{{displayParentTypeName}}>();
+              {{TAB2}}instance.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
+              {{TAB2}}return instance.GetScript().As<{{displayTypeName}}>();
+              {{TAB1}}}
               
               """
         );
@@ -121,7 +123,7 @@ internal static partial class CodeGenerator
         const string backingName = "_backing";
         const string backingArgument = "backing";
         const string constructMethodName = "Construct";
-        var baseType = GetRootParentType(gdeTypeInfo, godotBuiltinClassNames);
+        var baseType = GetParentGDERootParent(gdeTypeInfo, godotBuiltinClassNames);
 
         var isRootWrapper = gdeTypeInfo.ParentType.TypeName == baseType || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
 
@@ -134,7 +136,7 @@ internal static partial class CodeGenerator
                   using System;
                   using Godot;
 
-                  namespace {{NAMESPACE_RC}};
+                  namespace {{NAMESPACE}};
 
                   public class {{displayTypeName}} : IDisposable
                   {
@@ -159,7 +161,7 @@ internal static partial class CodeGenerator
                 $$"""
                   using Godot;
 
-                  namespace {{NAMESPACE_RC}};
+                  namespace {{NAMESPACE}};
 
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
@@ -183,75 +185,6 @@ internal static partial class CodeGenerator
         codeBuilder.Append('}');
     }
 
-    
-    private static void GenerateCodeForResource(
-        StringBuilder codeBuilder,
-        ClassInfo gdeTypeInfo,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
-        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
-        ICollection<string> godotBuiltinClassNames
-    )
-    {
-        var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
-        var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
-        
-        const string backingName = "_backing";
-        const string backingArgument = "backing";
-        const string resourceName = nameof(Resource);
-
-        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == resourceName || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
-
-        if (isRootWrapper)
-        {
-            codeBuilder.AppendLine(
-                $$"""
-                  using Godot;
-
-                  namespace {{NAMESPACE_RES}};
-
-                  public class {{displayTypeName}}
-                  {
-                  
-                  {{TAB1}}public static implicit operator Variant({{displayTypeName}} resource) => resource.{{backingName}};
-                  
-                  {{TAB1}}protected readonly {{resourceName}} {{backingName}};
-
-                  {{TAB1}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
-                  {{TAB1}}{
-                  {{TAB2}}{{backingName}} = {{backingArgument}};
-                  {{TAB1}}}
-
-                  """
-            );
-        }
-        else
-        {
-            codeBuilder.AppendLine(
-                $$"""
-                  using Godot;
-
-                  namespace {{NAMESPACE_RES}};
-
-                  public class {{displayTypeName}} : {{displayParentTypeName}}
-                  {
-                  
-                  {{TAB1}}public {{displayTypeName}}({{resourceName}} {{backingArgument}}) : base({{backingArgument}}) { }
-
-                  """
-            );
-        }
-
-        GenerateMembers(
-            codeBuilder,
-            gdeTypeInfo,
-            gdeTypeMap,
-            godotSharpTypeNameMap,
-            godotBuiltinClassNames,
-            $"{backingName}."
-        );
-
-        codeBuilder.Append('}');
-    }
 
     private static void GenerateMembers(
         StringBuilder codeBuilder,
@@ -730,7 +663,7 @@ internal static partial class CodeGenerator
             {
                 if (gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
                 {
-                    var interopType = GetRootParentType(returnTypeInfo, builtinTypeNames);
+                    var interopType = GetParentGDERootParent(returnTypeInfo, builtinTypeNames);
                     interopType = godotSharpTypeNameMap.GetValueOrDefault(interopType, interopType);
                     stringBuilder.Append($".As<{interopType}>())");
                 }
@@ -759,18 +692,12 @@ internal static partial class CodeGenerator
         var returnValueName = methodInfo.ReturnValue.GetTypeName();
         if (gdeTypeMap.TryGetValue(returnValueName, out var returnTypeInfo))
         {
-            switch (returnTypeInfo.ParentType.TypeName)
+            returnValueName = returnTypeInfo.ParentType.TypeName switch
             {
-                case nameof(Resource):
-                    returnValueName = $"{NAMESPACE_RES}.{returnValueName}";
-                    break;
-                case nameof(Node):
-                    returnValueName = $"{NAMESPACE_NODE}.{returnValueName}";
-                    break;
-                case nameof(RefCounted):
-                    returnValueName = $"{NAMESPACE_RC}.{returnValueName}";
-                    break;
-            }
+                nameof(Node) => $"{NAMESPACE}.{returnValueName}",
+                nameof(RefCounted) => $"{NAMESPACE}.{returnValueName}",
+                _ => returnValueName
+            };
         }
 
         return returnValueName;
@@ -787,15 +714,12 @@ internal static partial class CodeGenerator
     )
     {
         var targetType = classInfo.TypeName;
-        var backingType = GetRootParentType(classInfo, builtinTypes);
+        var backingType = GetParentGDERootParent(classInfo, builtinTypes);
         backingType = godotSharpTypeNameMap.GetValueOrDefault(backingType, backingType);
         var backingName = $"{variantArgumentName}_backingType";
         builder.AppendLine($"{tab}var {backingName} = {variantArgumentName}.As<{backingType}>();");
         switch (GetBaseType(classInfo) )
         {
-            case BaseType.Resource:
-                builder.AppendLine($"{tab}var {targetArgumentName} = new {targetType}({backingName})");
-                break;
             case BaseType.Other:
                 builder.AppendLine($"{tab}var {targetArgumentName} = new {targetType}({backingName})");
                 break;
@@ -810,15 +734,6 @@ internal static partial class CodeGenerator
                 throw new ArgumentOutOfRangeException();
         }
     }
-
-    private static string GetRootParentType(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes) =>
-        GetBaseType(gdeTypeInfo) switch
-        {
-            BaseType.Resource => nameof(Resource),
-            BaseType.Other => GetParentGDERootParent(gdeTypeInfo, builtinTypes),
-            BaseType.Node => GetParentGDERootParent(gdeTypeInfo, builtinTypes),
-            _ => throw new ArgumentOutOfRangeException()
-        };
 
     private static string GetParentGDERootParent(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes)
     {
@@ -861,7 +776,7 @@ internal static partial class CodeGenerator
             
             if (gdeTypeMap.TryGetValue(propertyInfo.GetTypeName(), out var gdeClassInfo))
             {
-                var bassType = GetRootParentType(gdeClassInfo, builtinTypes);
+                var bassType = GetParentGDERootParent(gdeClassInfo, builtinTypes);
                 bassType = godotsharpTypeMap.GetValueOrDefault(bassType, bassType);
                 stringBuilder.Append($"({bassType})");
             }
