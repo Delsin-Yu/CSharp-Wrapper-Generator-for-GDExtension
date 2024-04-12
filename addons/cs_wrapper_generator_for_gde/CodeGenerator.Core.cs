@@ -87,10 +87,13 @@ internal static partial class CodeGenerator
 
               public partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
+              
               """
         );
 
-        var propertyInfoList = ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, string.Empty);
+        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
+        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
+        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, string.Empty);
         ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, string.Empty);
 
         codeBuilder.Append('}');
@@ -143,6 +146,7 @@ internal static partial class CodeGenerator
                   {{TAB}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
                   {{TAB}}public void Dispose() => {{backingName}}.Dispose();
+                  
                   """
             );
         }
@@ -164,7 +168,9 @@ internal static partial class CodeGenerator
             );
         }
 
-        var propertyInfoList = ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
+        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
+        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
         ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, $"{backingName}.");
         
         codeBuilder.Append('}');
@@ -228,12 +234,87 @@ internal static partial class CodeGenerator
             );
         }
 
-        var propertyInfoList = ConstructProperties(gdeTypeInfo, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
+        var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
+        ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
+        ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, $"{backingName}.");
         ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, $"{backingName}.");
         
         codeBuilder.Append('}');
     }
 
+    private static IReadOnlyList<PropertyInfo> CollectPropertyInfo(ClassInfo gdeTypeInfo)
+    {
+        var propertyList = ClassDB.ClassGetPropertyList(gdeTypeInfo.TypeName, true);
+
+        var propertyInfoList = new List<PropertyInfo>();
+        
+        foreach (var propertyDictionary in propertyList)
+        {
+            var propertyInfo = new PropertyInfo(propertyDictionary);
+            propertyInfoList.Add(propertyInfo);
+            propertyDictionary.Dispose();
+        }
+
+        return propertyInfoList;
+    }
+    
+    private static void ConstructEnums(
+        IReadOnlyList<PropertyInfo> propertyInfos,
+        StringBuilder codeBuilder,
+        ClassInfo gdeTypeInfo
+        )
+    {
+        var enumList = ClassDB.ClassGetEnumList(gdeTypeInfo.TypeName, true);
+        if (enumList.Length != 0)
+        {
+            codeBuilder.AppendLine("""
+                                   #region Enums
+                                   
+                                   """
+                                   );
+        }
+        
+        foreach (var enumName in enumList)
+        {
+            var enumFormatName = EscapeAndFormatName(enumName);
+
+            if (propertyInfos.Any(x => x.GetPropertyName() == enumFormatName))
+            {
+                enumFormatName += "Enum";
+            }
+            
+            codeBuilder.Append($$"""
+                                 {{TAB}}public enum {{enumFormatName}}
+                                 {{TAB}}{
+
+                                 """);
+
+            var enumConstants = ClassDB.ClassGetEnumConstants(gdeTypeInfo.TypeName, enumName, true);
+
+            foreach (var enumConstant in enumConstants)
+            {
+                var enumIntValue = ClassDB.ClassGetIntegerConstant(gdeTypeInfo.TypeName, enumConstant);
+                var enumValueFormatName = EscapeAndFormatName(enumConstant);
+                var index = enumValueFormatName.IndexOf(enumFormatName, StringComparison.Ordinal);
+                if (index != -1) enumValueFormatName = enumValueFormatName.Remove(index, enumFormatName.Length);
+                codeBuilder.AppendLine($"{TAB}{TAB}{enumValueFormatName} = {enumIntValue},");
+            }
+            
+            codeBuilder
+                .AppendLine($"{TAB}}}")
+                .AppendLine();
+        }
+
+        if (enumList.Length != 0)
+        {
+            codeBuilder.AppendLine("""
+                                   #endregion
+
+                                   """
+            );
+        }
+    }
+    
     private readonly struct PropertyInfo
     {
         public readonly Variant.Type Type = Variant.Type.Nil;
@@ -268,22 +349,24 @@ internal static partial class CodeGenerator
         public string GetArgumentName() => EscapeAndFormatName(NativeName, true);
     }
     
-    private static IReadOnlyList<PropertyInfo> ConstructProperties(
-        ClassInfo gdeTypeInfo,
+    private static void ConstructProperties(
+        IReadOnlyList<PropertyInfo> propertyInfos,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         StringBuilder stringBuilder,
         string backing
     )
     {
-        var propertyList = ClassDB.ClassGetPropertyList(gdeTypeInfo.TypeName, true);
-
-        var propertyInfoList = new List<PropertyInfo>();
-        
-        foreach (var propertyDictionary in propertyList)
+        if (propertyInfos.Count != 0)
         {
-            var propertyInfo = new PropertyInfo(propertyDictionary);
-            propertyInfoList.Add(propertyInfo);
+            stringBuilder.AppendLine("""
+                                     #region Properties
 
+                                     """
+            );
+        }
+        
+        foreach (var propertyInfo in propertyInfos)
+        {
             if (propertyInfo.IsGroupOrSubgroup) continue;
 
             var typeName = propertyInfo.GetTypeName();
@@ -297,11 +380,16 @@ internal static partial class CodeGenerator
                 .AppendLine($"""{TAB}{TAB}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
                 .AppendLine($"{TAB}}}")
                 .AppendLine();
-            
-            propertyDictionary.Dispose();
         }
+        
+        if (propertyInfos.Count != 0)
+        {
+            stringBuilder.AppendLine("""
+                                     #endregion
 
-        return propertyInfoList;
+                                     """
+            );
+        }
     }
 
     private readonly struct MethodInfo
@@ -345,6 +433,16 @@ internal static partial class CodeGenerator
     {
         var methodList = ClassDB.ClassGetMethodList(gdeTypeInfo.TypeName, true);
 
+        if (methodList.Count != 0)
+        {
+            stringBuilder.AppendLine("""
+                                     #region Methods
+
+                                     """
+            );
+        }
+
+        
         foreach (var methodDictionary in methodList)
         {
             var methodInfo = new MethodInfo(methodDictionary);
@@ -434,6 +532,16 @@ internal static partial class CodeGenerator
             stringBuilder.AppendLine(";").AppendLine();
             
             methodDictionary.Dispose();
+        }
+        
+                
+        if (methodList.Count != 0)
+        {
+            stringBuilder.AppendLine("""
+                                     #endregion
+
+                                     """
+            );
         }
     }
 
