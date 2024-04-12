@@ -35,7 +35,7 @@ internal static partial class CodeGenerator
                 throw new ArgumentOutOfRangeException();
         }
         
-        return ($"{gdeTypeInfo.TypeName}.gdextension.cs", codeBuilder.ToString());
+        return (gdeTypeInfo.TypeName, codeBuilder.ToString());
     }
     
     private enum BaseType
@@ -63,7 +63,12 @@ internal static partial class CodeGenerator
         }
     }
 
-    private const string TAB = "    ";
+    private const string TAB1 = "    ";
+    private const string TAB2 = TAB1 + TAB1;
+    private const string TAB3 = TAB2 + TAB1;
+    private const string TAB4 = TAB2 + TAB2;
+    private const string TAB5 = TAB4 + TAB1;
+    private const string TAB6 = TAB3 + TAB3;
     private const string NAMESPACE_RES = "GDExtension.ResourcesWrappers";
     private const string NAMESPACE_RC = "GDExtension.RefCountedWrappers";
     private const string NAMESPACE_NODE = "GDExtension.NodeWrappers";
@@ -134,21 +139,16 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : IDisposable
                   {
                   
-                  {{TAB}}public static implicit operator Variant({{displayTypeName}} refCount) => refCount.{{backingName}};
+                  {{TAB1}}protected virtual {{baseType}} {{constructMethodName}}() =>
+                  {{TAB2}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
                   
-                  {{TAB}}protected virtual {{baseType}} {{constructMethodName}}() =>
-                  {{TAB}}{{TAB}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  {{TAB1}}protected readonly {{baseType}} {{backingName}};
                   
-                  {{TAB}}public {{displayTypeName}} {{constructMethodName}}({{baseType}} {{backingArgument}}) =>
-                  {{TAB}}{{TAB}}new {{displayTypeName}}({{backingArgument}});
+                  {{TAB1}}public {{displayTypeName}}() => {{backingName}} = {{constructMethodName}}();
                   
-                  {{TAB}}protected readonly {{baseType}} {{backingName}};
+                  {{TAB1}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
-                  {{TAB}}public {{displayTypeName}}() => {{backingName}} = {{constructMethodName}}();
-                  
-                  {{TAB}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
-                  
-                  {{TAB}}public void Dispose() => {{backingName}}.Dispose();
+                  {{TAB1}}public void Dispose() => {{backingName}}.Dispose();
                   
                   """
             );
@@ -164,8 +164,8 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
 
-                  {{TAB}}protected override {{baseType}} {{constructMethodName}}() =>
-                  {{TAB}}{{TAB}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  {{TAB1}}protected override {{baseType}} {{constructMethodName}}() =>
+                  {{TAB2}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
 
                   """
             );
@@ -212,14 +212,14 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}}
                   {
                   
-                  {{TAB}}public static implicit operator Variant({{displayTypeName}} resource) => resource.{{backingName}};
+                  {{TAB1}}public static implicit operator Variant({{displayTypeName}} resource) => resource.{{backingName}};
                   
-                  {{TAB}}protected readonly {{resourceName}} {{backingName}};
+                  {{TAB1}}protected readonly {{resourceName}} {{backingName}};
 
-                  {{TAB}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
-                  {{TAB}}{
-                  {{TAB}}{{TAB}}{{backingName}} = {{backingArgument}};
-                  {{TAB}}}
+                  {{TAB1}}public {{displayTypeName}}({{resourceName}} {{backingArgument}})
+                  {{TAB1}}{
+                  {{TAB2}}{{backingName}} = {{backingArgument}};
+                  {{TAB1}}}
 
                   """
             );
@@ -235,7 +235,7 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
                   
-                  {{TAB}}public {{displayTypeName}}({{resourceName}} {{backingArgument}}) : base({{backingArgument}}) { }
+                  {{TAB1}}public {{displayTypeName}}({{resourceName}} {{backingArgument}}) : base({{backingArgument}}) { }
 
                   """
             );
@@ -264,7 +264,7 @@ internal static partial class CodeGenerator
     {
         var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
         ConstructEnums(propertyInfoList, codeBuilder, gdeTypeInfo);
-        ConstructSignals(codeBuilder, gdeTypeMap, gdeTypeInfo);
+        ConstructSignals(codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, gdeTypeInfo);
         ConstructProperties(propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
         ConstructMethods(gdeTypeInfo, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, propertyInfoList, codeBuilder, backingName);
     }
@@ -312,8 +312,8 @@ internal static partial class CodeGenerator
             }
             
             codeBuilder.Append($$"""
-                                 {{TAB}}public enum {{enumFormatName}}
-                                 {{TAB}}{
+                                 {{TAB1}}public enum {{enumFormatName}}
+                                 {{TAB1}}{
 
                                  """);
 
@@ -325,11 +325,11 @@ internal static partial class CodeGenerator
                 var enumValueFormatName = EscapeAndFormatName(enumConstant);
                 var index = enumValueFormatName.IndexOf(enumFormatName, StringComparison.Ordinal);
                 if (index != -1) enumValueFormatName = enumValueFormatName.Remove(index, enumFormatName.Length);
-                codeBuilder.AppendLine($"{TAB}{TAB}{enumValueFormatName} = {enumIntValue},");
+                codeBuilder.AppendLine($"{TAB2}{enumValueFormatName} = {enumIntValue},");
             }
             
             codeBuilder
-                .AppendLine($"{TAB}}}")
+                .AppendLine($"{TAB1}}}")
                 .AppendLine();
         }
 
@@ -346,6 +346,8 @@ internal static partial class CodeGenerator
     private static void ConstructSignals(
         StringBuilder codeBuilder,
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        ICollection<string> builtinTypes,
         ClassInfo gdeTypeInfo
     )
     {
@@ -366,24 +368,147 @@ internal static partial class CodeGenerator
 
             var returnValueName = GetReturnValueName(gdeTypeMap, signalInfo);
 
-            var signalDelegateName = $"{signalInfo.GetMethodName()}Handler";
-            
-            codeBuilder.Append($"{TAB}public delegate {returnValueName} {signalDelegateName}(");
+            var signalName = signalInfo.GetMethodName();
+            var signalDelegateName = $"{signalName}Handler";
+            var signalNameCamelCase = ToCamelCase(signalName);
+            var backingDelegateName = $"_{signalNameCamelCase}_backing";
+            var backingCallableName = $"_{signalNameCamelCase}_backing_callable";
+
+            codeBuilder.Append($"{TAB1}public delegate {returnValueName} {signalDelegateName}(");
             
             BuildupMethodArguments(codeBuilder, signalInfo.Arguments);
 
             codeBuilder
                 .AppendLine(");")
                 .AppendLine();
+
+
+            const string callableName = nameof(Callable);
+            
+            codeBuilder.Append(
+                $$"""
+                  {{TAB1}}private {{signalDelegateName}}? {{backingDelegateName}};
+                  {{TAB1}}private {{callableName}} {{backingCallableName}};
+                  {{TAB1}}public event {{signalDelegateName}} {{signalName}}
+                  {{TAB1}}{
+                  {{TAB2}}add
+                  {{TAB2}}{
+                  {{TAB3}}if({{backingDelegateName}} == null)
+                  {{TAB3}}{
+                  {{TAB4}}{{backingCallableName}} = {{callableName}}.From
+                  """
+            );
+
+            var argumentsLength = signalInfo.Arguments.Length;
+
+            if (argumentsLength > 0) codeBuilder.Append('<');
+            
+            for (var i = 0; i < argumentsLength; i++)
+            {
+                codeBuilder.Append(nameof(Variant));
+
+                if (i != argumentsLength - 1)
+                {
+                    codeBuilder.Append(", ");
+                }
+            }
+            
+            if (argumentsLength > 0) codeBuilder.Append('>');
+            
+            codeBuilder.Append(
+                $"""
+                 (
+                 {TAB5}(
+                 """
+            );
+
+            const string argPrefix = "arg";
+            const string unmanagedPostfix = "_unmanaged";
+
+            static string UnmanagedArg(int index) => 
+                $"{argPrefix}{index}{unmanagedPostfix}";
+                       
+            static string Arg(int index) => 
+                $"{argPrefix}{index}";
+            
+            for (var i = 0; i < argumentsLength; i++)
+            {
+                codeBuilder.Append(UnmanagedArg(i));
+
+                if (i != argumentsLength - 1)
+                {
+                    codeBuilder.Append(", ");
+                }
+            }
             
             codeBuilder.AppendLine(
                 $$"""
-                {{TAB}}public event {{signalDelegateName}} {{signalInfo.GetMethodName()}}
-                {{TAB}}{
-                {{TAB}}{{TAB}}add => ;
-                {{TAB}}{{TAB}}remove => ;
-                {{TAB}}}
-                """
+                 ) =>
+                 {{TAB5}}{
+                 """
+            );
+
+            for (var index = 0; index < signalInfo.Arguments.Length; index++)
+            {
+                var argumentInfo = signalInfo.Arguments[index];
+                var unmanagedArgName = UnmanagedArg(index);
+                var convertedArgName = Arg(index);
+                var argumentType = argumentInfo.GetTypeName();
+                argumentType = godotSharpTypeNameMap.GetValueOrDefault(argumentType, argumentType);
+                if (gdeTypeMap.TryGetValue(argumentType, out var gdeType))
+                {
+                    GenerateVariantToWrapperCode(
+                        TAB6,
+                        gdeType,
+                        builtinTypes,
+                        godotSharpTypeNameMap,
+                        codeBuilder,
+                        unmanagedArgName,
+                        convertedArgName
+                    );
+                }
+                else
+                {
+                    codeBuilder.AppendLine(
+                        $"{TAB6}var {convertedArgName} = {unmanagedArgName}.As<{argumentType}>();"
+                    );
+                }
+            }
+
+            codeBuilder.Append($"{TAB6}{backingDelegateName}?.Invoke(");
+
+            for (var i = 0; i < argumentsLength; i++)
+            {
+                codeBuilder.Append(Arg(i));
+
+                if (i != argumentsLength - 1)
+                {
+                    codeBuilder.Append(", ");
+                }
+            }
+            
+            codeBuilder.AppendLine(");");
+            
+            codeBuilder.AppendLine(
+                    $$"""
+                    {{TAB5}}}
+                    {{TAB4}});
+                    {{TAB4}}Connect("{{signalInfo.NativeName}}", {{backingCallableName}});
+                    {{TAB3}}}
+                    {{TAB3}}{{backingDelegateName}} += value;
+                    {{TAB2}}}
+                    {{TAB2}}remove
+                    {{TAB2}}{
+                    {{TAB3}}{{backingDelegateName}} -= value;
+                    {{TAB3}}
+                    {{TAB3}}if({{backingDelegateName}} == null)
+                    {{TAB3}}{
+                    {{TAB4}}Disconnect("{{signalInfo.NativeName}}", {{backingCallableName}});
+                    {{TAB4}}{{backingCallableName}} = default;
+                    {{TAB3}}}
+                    {{TAB2}}}
+                    {{TAB1}}}
+                    """
                 )
                 .AppendLine();
             
@@ -459,11 +584,11 @@ internal static partial class CodeGenerator
             godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
 
             stringBuilder
-                .AppendLine($"{TAB}public {typeName} {propertyInfo.GetPropertyName()}")
-                .AppendLine($"{TAB}{{")
-                .AppendLine($"""{TAB}{TAB}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
-                .AppendLine($"""{TAB}{TAB}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
-                .AppendLine($"{TAB}}}")
+                .AppendLine($"{TAB1}public {typeName} {propertyInfo.GetPropertyName()}")
+                .AppendLine($"{TAB1}{{")
+                .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
+                .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
+                .AppendLine($"{TAB1}}}")
                 .AppendLine();
         }
         
@@ -516,9 +641,47 @@ internal static partial class CodeGenerator
         string backing
     )
     {
-        var methodList = ClassDB.ClassGetMethodList(gdeTypeInfo.TypeName, true);
+        var methodInfoList = ClassDB
+            .ClassGetMethodList(gdeTypeInfo.TypeName, true)
+            .Select(
+                x =>
+                {
+                    var methodInfo = new MethodInfo(x);
+                    x.Dispose();
+                    return methodInfo;
+                }
+            )
+            .Where(
+                methodInfo =>
+                {
+                    var methodNativeName = methodInfo.NativeName;
+                    return propertyInfos.Any(
+                        propertyInfo =>
+                        {
+                            var propertyNativeName = propertyInfo.NativeName;
+                            if (methodNativeName.Contains(propertyNativeName))
+                            {
+                                var index = methodNativeName.IndexOf(propertyNativeName, StringComparison.Ordinal);
+                                var spiltResult = methodNativeName.Remove(index, propertyNativeName.Length);
+                                if (spiltResult is "set_" or "get_") return false;
+                            }
 
-        if (methodList.Count != 0)
+                            var propertyNativeNameEscaped = EscapeNameRegex().Replace(propertyNativeName, "_");
+                            if (methodNativeName.Contains(propertyNativeNameEscaped))
+                            {
+                                var index = methodNativeName.IndexOf(propertyNativeNameEscaped, StringComparison.Ordinal);
+                                var spiltResult = methodNativeName.Remove(index, propertyNativeNameEscaped.Length);
+                                if (spiltResult is "set_" or "get_") return false;
+                            }
+
+                            return true;
+                        }
+                    );
+                }
+            )
+            .ToArray();
+
+        if (methodInfoList.Length != 0)
         {
             stringBuilder.AppendLine("""
                                      #region Methods
@@ -528,36 +691,13 @@ internal static partial class CodeGenerator
         }
 
         
-        foreach (var methodDictionary in methodList)
+        foreach (var methodInfo in methodInfoList)
         {
-            var methodInfo = new MethodInfo(methodDictionary);
-
             var methodNativeName = methodInfo.NativeName;
-            if (propertyInfos.Any(
-                    x =>
-                    {
-                        var propertyNativeName = x.NativeName;
-                        if (methodNativeName.Contains(propertyNativeName))
-                        {
-                            var index = methodNativeName.IndexOf(propertyNativeName, StringComparison.Ordinal);
-                            var spiltResult = methodNativeName.Remove(index, propertyNativeName.Length);
-                            if (spiltResult is "set_" or "get_") return true;
-                        }
-                        var propertyNativeNameEscaped = EscapeNameRegex().Replace(propertyNativeName, "_");
-                        if (methodNativeName.Contains(propertyNativeNameEscaped))
-                        {
-                            var index = methodNativeName.IndexOf(propertyNativeNameEscaped, StringComparison.Ordinal);
-                            var spiltResult = methodNativeName.Remove(index, propertyNativeNameEscaped.Length);
-                            if (spiltResult is "set_" or "get_") return true;
-                        }
-                        return false;
-                    }
-                )) continue;
-            
             var returnValueName = GetReturnValueName(gdeTypeMap, methodInfo);
 
             stringBuilder
-                .Append($"{TAB}public ")
+                .Append($"{TAB1}public ")
                 .Append(returnValueName)
                 .Append(' ')
                 .Append(methodInfo.GetMethodName())
@@ -581,7 +721,7 @@ internal static partial class CodeGenerator
             if (methodInfo.Arguments.Length > 0)
             {
                 stringBuilder.Append(", ");
-                BuildupMethodCallArguments(stringBuilder, methodInfo.Arguments);
+                BuildupMethodCallArguments(stringBuilder, methodInfo.Arguments, gdeTypeMap, godotSharpTypeNameMap, builtinTypeNames);
             }
 
             stringBuilder.Append(')');
@@ -601,12 +741,10 @@ internal static partial class CodeGenerator
             }
             
             stringBuilder.AppendLine(";").AppendLine();
-            
-            methodDictionary.Dispose();
         }
         
                 
-        if (methodList.Count != 0)
+        if (methodInfoList.Length != 0)
         {
             stringBuilder.AppendLine("""
                                      #endregion
@@ -636,6 +774,41 @@ internal static partial class CodeGenerator
         }
 
         return returnValueName;
+    }
+
+    private static void GenerateVariantToWrapperCode(
+        string tab,
+        ClassInfo classInfo,
+        ICollection<string> builtinTypes,
+        IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        StringBuilder builder,
+        string variantArgumentName,
+        string targetArgumentName
+    )
+    {
+        var targetType = classInfo.TypeName;
+        var backingType = GetRootParentType(classInfo, builtinTypes);
+        backingType = godotSharpTypeNameMap.GetValueOrDefault(backingType, backingType);
+        var backingName = $"{variantArgumentName}_backingType";
+        builder.AppendLine($"{tab}var {backingName} = {variantArgumentName}.As<{backingType}>();");
+        switch (GetBaseType(classInfo) )
+        {
+            case BaseType.Resource:
+                builder.AppendLine($"{tab}var {targetArgumentName} = new {targetType}({backingName})");
+                break;
+            case BaseType.Other:
+                builder.AppendLine($"{tab}var {targetArgumentName} = new {targetType}({backingName})");
+                break;
+            case BaseType.Node:
+                builder.Append($"""
+                                {tab}{backingName}.SetScript(ResourceLoader.Load("{GeneratorMain.GetWrapperPath(targetType)}"));
+                                {tab}var {targetArgumentName} = {backingName}.GetScript().As<{targetType}>();
+                                
+                                """);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
     }
 
     private static string GetRootParentType(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes) =>
@@ -674,20 +847,34 @@ internal static partial class CodeGenerator
         }
     }
 
-    private static void BuildupMethodCallArguments(StringBuilder stringBuilder, PropertyInfo[] propertyInfos)
+    private static void BuildupMethodCallArguments(
+        StringBuilder stringBuilder,
+        PropertyInfo[] propertyInfos,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, string> godotsharpTypeMap,
+        ICollection<string> builtinTypes
+    )
     {
         for (var i = 0; i < propertyInfos.Length; i++)
         {
             var propertyInfo = propertyInfos[i];
+            
+            if (gdeTypeMap.TryGetValue(propertyInfo.GetTypeName(), out var gdeClassInfo))
+            {
+                var bassType = GetRootParentType(gdeClassInfo, builtinTypes);
+                bassType = godotsharpTypeMap.GetValueOrDefault(bassType, bassType);
+                stringBuilder.Append($"({bassType})");
+            }
+            
             stringBuilder.Append(propertyInfo.GetArgumentName());
-
+            
             if (i != propertyInfos.Length - 1)
             {
                 stringBuilder.Append(", ");
             }
-        }  
+        }
     }
-    
+
     public static string VariantToTypeName(Variant.Type type, string className) =>
         type switch
         {
@@ -755,14 +942,20 @@ internal static partial class CodeGenerator
             .Replace(sourceName, "_")
             .ToPascalCase();
 
-        if (camelCase && pascalCaseName.Length > 0)
+        if (camelCase)
         {
-            pascalCaseName = pascalCaseName[..1].ToLowerInvariant() + pascalCaseName[1..];
+            pascalCaseName = ToCamelCase(pascalCaseName);
         }
         if (_csKeyword.Contains(pascalCaseName))
         {
             pascalCaseName = $"@{pascalCaseName}";
         }
         return pascalCaseName;
+    }
+
+    public static string ToCamelCase(string sourceName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName)) return sourceName;
+        return sourceName[..1].ToLowerInvariant() + sourceName[1..];
     }
 }
