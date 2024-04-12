@@ -25,11 +25,11 @@ internal static partial class CodeGenerator
             case BaseType.Resource:
                 GenerateCodeForResource(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
                 break;
-            case BaseType.RefCounted:
-                GenerateCodeForNode(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
+            case BaseType.Other:
+                GenerateCodeForOther(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
                 break;
             case BaseType.Node:
-                GenerateCodeForRefCounted(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
+                GenerateCodeForNode(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
@@ -41,7 +41,7 @@ internal static partial class CodeGenerator
     private enum BaseType
     {
         Resource,
-        RefCounted,
+        Other,
         Node
     }
 
@@ -49,7 +49,7 @@ internal static partial class CodeGenerator
     {
         if (ContainsParent(classInfo, nameof(Resource))) return BaseType.Resource;
         if (ContainsParent(classInfo, nameof(Node))) return BaseType.Node;
-        return BaseType.RefCounted;
+        return BaseType.Other;
     }
 
     private static bool ContainsParent(ClassInfo classInfo, string parentName)
@@ -96,7 +96,7 @@ internal static partial class CodeGenerator
         codeBuilder.Append('}');
     }
 
-    private static void GenerateCodeForRefCounted(
+    private static void GenerateCodeForOther(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
@@ -110,10 +110,12 @@ internal static partial class CodeGenerator
         const string backingName = "_backing";
         const string backingArgument = "backing";
         const string constructMethodName = "Construct";
-        var refCountedName = nameof(RefCounted);
+        var baseType = GetRootParentType(gdeTypeInfo, godotBuiltinClassNames);
 
-        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == refCountedName || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
+        var isRootWrapper = gdeTypeInfo.ParentType.TypeName == baseType || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
 
+        baseType = godotSharpTypeNameMap.GetValueOrDefault(baseType, baseType);
+        
         if (isRootWrapper)
         {
             codeBuilder.AppendLine(
@@ -128,17 +130,17 @@ internal static partial class CodeGenerator
                   
                   {{TAB}}public static implicit operator Variant({{displayTypeName}} refCount) => refCount.{{backingName}};
                   
-                  {{TAB}}protected virtual {{refCountedName}} {{constructMethodName}}() =>
-                  {{TAB}}{{TAB}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  {{TAB}}protected virtual {{baseType}} {{constructMethodName}}() =>
+                  {{TAB}}{{TAB}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
                   
-                  {{TAB}}public {{displayTypeName}} {{constructMethodName}}({{refCountedName}} {{backingArgument}}) =>
+                  {{TAB}}public {{displayTypeName}} {{constructMethodName}}({{baseType}} {{backingArgument}}) =>
                   {{TAB}}{{TAB}}new {{displayTypeName}}({{backingArgument}});
                   
-                  {{TAB}}protected readonly {{refCountedName}} {{backingName}};
+                  {{TAB}}protected readonly {{baseType}} {{backingName}};
                   
                   {{TAB}}public {{displayTypeName}}() => {{backingName}} = {{constructMethodName}}();
                   
-                  {{TAB}}private {{displayTypeName}}({{refCountedName}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
+                  {{TAB}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
                   {{TAB}}public void Dispose() => {{backingName}}.Dispose();
                   """
@@ -155,8 +157,8 @@ internal static partial class CodeGenerator
                   public class {{displayTypeName}} : {{displayParentTypeName}}
                   {
 
-                  {{TAB}}protected override {{refCountedName}} {{constructMethodName}}() =>
-                  {{TAB}}{{TAB}}({{refCountedName}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
+                  {{TAB}}protected override {{baseType}} {{constructMethodName}}() =>
+                  {{TAB}}{{TAB}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
 
                   """
             );
@@ -182,7 +184,7 @@ internal static partial class CodeGenerator
         
         const string backingName = "_backing";
         const string backingArgument = "backing";
-        var resourceName = nameof(Resource);
+        const string resourceName = nameof(Resource);
 
         var isRootWrapper = gdeTypeInfo.ParentType.TypeName == resourceName || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
 
@@ -302,7 +304,7 @@ internal static partial class CodeGenerator
         return propertyInfoList;
     }
 
-    private struct MethodInfo
+    private readonly struct MethodInfo
     {
         public readonly string NativeName;
         public readonly PropertyInfo ReturnValue;
@@ -419,15 +421,6 @@ internal static partial class CodeGenerator
             {
                 if (gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
                 {
-                    /*
-                         public JoltPhysicsServer3D CreateServer()
-                        {
-                            var baseType = Call("create_server").As<PhysicsServer3DExtension>();
-                            baseType.SetScript(GD.Load(""));
-                            return (JoltPhysicsServer3D)baseType;
-                        }
-                     */
-                    
                     var interopType = GetRootParentType(returnTypeInfo, builtinTypeNames);
                     interopType = godotSharpTypeNameMap.GetValueOrDefault(interopType, interopType);
                     stringBuilder.Append($".As<{interopType}>())");
@@ -448,7 +441,7 @@ internal static partial class CodeGenerator
         GetBaseType(gdeTypeInfo) switch
         {
             BaseType.Resource => nameof(Resource),
-            BaseType.RefCounted => nameof(RefCounted),
+            BaseType.Other => GetParentGDERootParent(gdeTypeInfo, builtinTypes),
             BaseType.Node => GetParentGDERootParent(gdeTypeInfo, builtinTypes),
             _ => throw new ArgumentOutOfRangeException()
         };
@@ -540,8 +533,9 @@ internal static partial class CodeGenerator
 
     [GeneratedRegex(@"[^a-zA-Z0-9_]")]
     private static partial Regex EscapeNameRegex();
-    private static HashSet<string> _csharp_keyword = new HashSet<string>()
-    {
+
+    private static readonly HashSet<string> _csKeyword =
+    [
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const",
         "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event", "explicit", "extern",
         "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int", "interface",
@@ -551,8 +545,8 @@ internal static partial class CodeGenerator
         "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
         "string", "object", "var", "dynamic", "yield", "add", "alias", "ascending", "async", "await", "by",
         "descending", "equals", "from", "get", "global", "group", "into", "join", "let", "nameof", "on", "orderby",
-        "partial", "remove", "select", "set","when", "where", "yield",
-    };
+        "partial", "remove", "select", "set", "when", "where", "yield"
+    ];
     
     public static string EscapeAndFormatName(string sourceName, bool camelCase = false)
     {
@@ -564,7 +558,7 @@ internal static partial class CodeGenerator
         {
             pascalCaseName = pascalCaseName[..1].ToLowerInvariant() + pascalCaseName[1..];
         }
-        if (_csharp_keyword.Contains(pascalCaseName))
+        if (_csKeyword.Contains(pascalCaseName))
         {
             pascalCaseName = $"@{pascalCaseName}";
         }
