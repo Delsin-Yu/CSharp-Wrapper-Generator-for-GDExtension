@@ -44,6 +44,8 @@ internal static partial class CodeGenerator
     {
         var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
         var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
+
+        var isAbstract = !ClassDB.CanInstantiate(gdeTypeInfo.TypeName);
         
         var engineBaseType = GetEngineBaseType(gdeTypeInfo, godotBuiltinClassNames);
         
@@ -51,6 +53,7 @@ internal static partial class CodeGenerator
 
         engineBaseType = godotSharpTypeNameMap.GetValueOrDefault(engineBaseType, engineBaseType);
         
+        var abstractKeyWord = isAbstract ? "abstract " : string.Empty;
         var newKeyWord = isRootWrapper ? string.Empty : "new ";
         
         codeBuilder.AppendLine(
@@ -60,7 +63,7 @@ internal static partial class CodeGenerator
 
               namespace {{NAMESPACE}};
 
-              public partial class {{displayTypeName}} : {{displayParentTypeName}}
+              public {{abstractKeyWord}}partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
               
               {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the Construct() method instead.")]
