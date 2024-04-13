@@ -14,9 +14,5 @@ entry_symbol = "gddragonbones_library_init"
 compatibility_minimum = 4.2
 
 [libraries]
-linux.x86_64.debug = "bin/libgddragonbones.linux.template_debug.x86_64.so"
-linux.x86_64.release = "bin/libgddragonbones.linux.template_release.x86_64.so"
-linux.x86_32.debug = "bin/libgddragonbones.linux.template_debug.x86_32.so"
-linux.x86_32.release = "bin/libgddragonbones.linux.template_release.x86_32.so"
 windows.x86_64.debug = "bin/libgddragonbones.windows.template_debug.x86_64.dll"
 windows.x86_64.release = "bin/libgddragonbones.windows.template_release.x86_64.dll"
