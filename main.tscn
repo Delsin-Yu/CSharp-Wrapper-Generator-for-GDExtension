@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://GDExtensionWrappers/GDCubismUserModel.cs" id="2_l5ob7"]
 
 [sub_resource type="GDCubismParameter" id="GDCubismParameter_qup6x"]
-maximum_value = -1.05359e-24
+maximum_value = 1.40452e-05
 value = 1.72554e-19
 
 [node name="Node" type="Node" node_paths=PackedStringArray("_gdCubismUserModel")]
