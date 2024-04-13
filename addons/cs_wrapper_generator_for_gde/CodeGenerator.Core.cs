@@ -180,9 +180,8 @@ internal static partial class CodeGenerator
     {
         while (true)
         {
-            var parentType = gdeTypeInfo.ParentType;
-            if (builtinTypes.Contains(parentType.TypeName)) return parentType.TypeName;
-            gdeTypeInfo = parentType;
+            if (builtinTypes.Contains(gdeTypeInfo.TypeName)) return gdeTypeInfo.TypeName;
+            gdeTypeInfo = gdeTypeInfo.ParentType;
         }
     }
 

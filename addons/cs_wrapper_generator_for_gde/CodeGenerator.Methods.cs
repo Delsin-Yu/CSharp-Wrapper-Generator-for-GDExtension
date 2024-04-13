@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Text;
+using Godot;
 
 namespace GDExtensionAPIGenerator;
 
@@ -43,7 +44,15 @@ internal static partial class CodeGenerator
             }
 
             stringBuilder
-                .Append($"{TAB1}public ")
+                .Append($"{TAB1}public ");
+
+            var isVirtual = methodInfo.Flags.HasFlag(MethodFlags.Virtual);
+            var isStatic = methodInfo.Flags.HasFlag(MethodFlags.Static);
+            
+            if (isStatic) stringBuilder.Append("static ");
+            if (isVirtual) stringBuilder.Append("virtual ");
+            
+            stringBuilder
                 .Append(returnValueName)
                 .Append(' ')
                 .Append(methodName)
@@ -51,7 +60,11 @@ internal static partial class CodeGenerator
 
             BuildupMethodArguments(stringBuilder, methodInfo.Arguments);
 
-            stringBuilder.Append(") => ");
+            stringBuilder.Append(')');
+            
+            // TODO: VIRTUAL
+            
+            stringBuilder.Append(" => ");
 
             if (!methodInfo.ReturnValue.IsVoid && 
                 gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
@@ -76,6 +89,8 @@ internal static partial class CodeGenerator
                     builtinTypeNames
                 );
             }
+            
+            // TODO: var isVararg = methodInfo.Flags.HasFlag(MethodFlags.Vararg);
 
             stringBuilder.Append(')');
 
