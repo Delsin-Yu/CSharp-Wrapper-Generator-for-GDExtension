@@ -17,8 +17,8 @@ internal static partial class TypeCollector
         // and make the Godot Editor execute a custom GDScript that prints every types
         // from the ClassDB, and parse the final StandardOutput when finish,
         // it's a dumb approach, but this is the only way we succeed.
-        
-        
+
+
         gdeClassTypes = null;
         godotBuiltinTypeNames = null;
         var tempPath = CreateTempDirectory();
@@ -65,16 +65,35 @@ internal static partial class TypeCollector
         // GDExtension types are the difference
         // between the builtin types and the types
         // existing in the current project's ClassDB. 
-        
+
         var currentClassTypes = ClassDB.GetClassList();
         godotBuiltinTypeNames = builtinClassTypes;
-        gdeClassTypes = currentClassTypes
-            .Except(builtinClassTypes)
+        var expectedClassTypes = currentClassTypes
+            .Except(builtinClassTypes);
+        var regex = GetExtractCamelCaseClassNameRegex();
+
+        var classTypes = expectedClassTypes.ToList();
+        var instantiatedClassTypes = classTypes
             .Where(x => ClassDB.CanInstantiate(x))
+            .ToHashSet();
+        var cannotInstantiateClassTypes = classTypes
+            .Except(instantiatedClassTypes)
             .ToArray();
+        var instantiatedSplitCamelCaseClassTypes = instantiatedClassTypes
+            .Select(x => regex.Match(x).Groups["CamelCase"].Captures[0].Value).ToHashSet();
+        foreach (var cannotInstantiateClassType in cannotInstantiateClassTypes)
+        {
+            var splitCamelCase = regex.Match(cannotInstantiateClassType).Groups["CamelCase"].Captures[0].Value;
+            if (!instantiatedSplitCamelCaseClassTypes.Contains(splitCamelCase)) continue;
+            instantiatedClassTypes.Add(cannotInstantiateClassType);
+        }
+     
+        gdeClassTypes = instantiatedClassTypes.ToArray();
         return true;
     }
-    
+    [GeneratedRegex("^(?<CamelCase>[A-Z0-9]*[a-z]*)+", RegexOptions.Singleline | RegexOptions.Compiled)]
+    private static partial Regex GetExtractCamelCaseClassNameRegex();
+
     private static string CreateTempDirectory()
     {
         var tempPath = Path.GetTempFileName();
@@ -82,7 +101,6 @@ internal static partial class TypeCollector
         Directory.CreateDirectory(tempPath);
         return tempPath;
     }
-    
     private static string CreateDumpDBScript(string tempPath)
     {
         const string dumpDBScript =
@@ -97,13 +115,11 @@ internal static partial class TypeCollector
              	quit()
              	return true
              """;
-        
         const string dumpDBFileName = "dump_class_db.gd";
         var scriptFullPath = Path.Combine(tempPath, dumpDBFileName);
         File.WriteAllText(scriptFullPath, dumpDBScript);
         return scriptFullPath;
     }
-    
     private static string CreateDummyProject(string tempPath)
     {
         var dummyProjectPath = Path.Combine(tempPath, "project");
@@ -111,13 +127,11 @@ internal static partial class TypeCollector
         using var config = new ConfigFile();
         config.SetValue(string.Empty, "config_version", 5);
         config.SetValue("application", "config/features", ProjectSettings.GetSetting("config/features"));
-        config.SetValue("application", "config/name", "Empty Project");
+        config.SetValue("application", "config/name","Empty Project");
         File.WriteAllText(Path.Combine(dummyProjectPath, "project.godot"), config.ToString());
 
         return dummyProjectPath;
     }
-    
-    
     private static bool ExtractClassNamesFromStdOut(string resultString, out HashSet<string> builtinClassTypes)
     {
         var matchResult = GetExtractClassNameRegex().Match(resultString);
@@ -134,10 +148,10 @@ internal static partial class TypeCollector
             .ToHashSet();
         return true;
     }
-    
+
     private const string GENERATOR_DUMP_HEADER = "WRAPPER_GENERATOR_DUMP_CLASS_DB_START";
     private const string GENERATOR_DUMP_FOOTER = "WRAPPER_GENERATOR_DUMP_CLASS_DB_END";
-    
+
     [GeneratedRegex(
         $"{GENERATOR_DUMP_HEADER}(?<ClassNames>.+?){GENERATOR_DUMP_FOOTER}",
         RegexOptions.Singleline | RegexOptions.NonBacktracking

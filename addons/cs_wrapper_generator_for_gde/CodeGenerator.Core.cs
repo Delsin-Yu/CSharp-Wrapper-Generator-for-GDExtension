@@ -163,6 +163,8 @@ internal static partial class CodeGenerator
                   
                   {{TAB1}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
+                  {{TAB1}}public static  explicit operator {{displayTypeName}}(Variant variant) => new(variant.As<{{baseType}}>());
+                  
                   {{TAB1}}public static implicit operator {{baseType}}({{displayTypeName}} instance) => instance.{{backingName}};
                   
                   {{TAB1}}public void Dispose() => {{backingName}}.Dispose();
@@ -192,6 +194,8 @@ internal static partial class CodeGenerator
                   {{TAB1}}protected override {{baseType}} {{constructMethodName}}() =>
                   {{TAB2}}({{baseType}})ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}");
 
+                  {{TAB1}}public static  explicit operator {{displayTypeName}}(Variant variant) => new(variant.As<{{baseType}}>());
+                  
                   {{TAB1}}public static implicit operator {{baseType}}({{displayTypeName}} instance) => instance.{{backingName}};
                   
                   """
@@ -800,7 +804,7 @@ internal static partial class CodeGenerator
         switch (GetBaseType(classInfo) )
         {
             case BaseType.Other:
-                builder.AppendLine($"{tab}var {targetArgumentName} = new {targetType}({backingName})");
+                builder.AppendLine($"{tab}var {targetArgumentName} = new {targetType}({backingName});");
                 break;
             case BaseType.Node:
                 builder.Append($"""
