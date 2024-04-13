@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Godot;
 using Environment = System.Environment;
 
@@ -11,6 +10,21 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class TypeCollector
 {
+    public static HashSet<string> BanClassType =
+    [
+        "CodeTextEditor",
+        "ConnectionInfoDialog",
+        "EditorPlainTextSyntaxHighlighter",
+        "EditorStandardSyntaxHighlighter",
+        "FramebufferCacheRD",
+        "GotoLineDialog",
+        "RenderBufferCustomDataRD",
+        "RenderBufferDataForwardClustered",
+        "RenderBuffersGI",
+        "ScriptEditorQuickOpen",
+        "ScriptTextEditor",
+        "UniformSetCacheRD"
+    ];
     public static bool TryCollectGDExtensionTypes(out string[] gdeClassTypes, out ICollection<string> godotBuiltinTypeNames)
     {
         // The builtin types are obtained by creating & launching an empty project,
@@ -65,31 +79,10 @@ internal static partial class TypeCollector
         // existing in the current project's ClassDB. 
         var currentClassTypes = ClassDB.GetClassList();
         godotBuiltinTypeNames = builtinClassTypes;
-        var expectedClassTypes = currentClassTypes
-            .Except(builtinClassTypes);
-        var regex = GetExtractCamelCaseClassNameRegex();
-
-        var classTypes = expectedClassTypes.ToList();
-        var instantiatedClassTypes = classTypes
-            .Where(x => ClassDB.CanInstantiate(x))
-            .ToHashSet();
-        var cannotInstantiateClassTypes = classTypes
-            .Except(instantiatedClassTypes)
-            .ToArray();
-        var instantiatedSplitCamelCaseClassTypes = instantiatedClassTypes
-            .Select(x => regex.Match(x).Groups["CamelCase"].Captures[0].Value).ToHashSet();
-        foreach (var cannotInstantiateClassType in cannotInstantiateClassTypes)
-        {
-            var splitCamelCase = regex.Match(cannotInstantiateClassType).Groups["CamelCase"].Captures[0].Value;
-            if (!instantiatedSplitCamelCaseClassTypes.Contains(splitCamelCase)) continue;
-            instantiatedClassTypes.Add(cannotInstantiateClassType);
-        }
-     
-        gdeClassTypes = instantiatedClassTypes.ToArray();
+        gdeClassTypes = currentClassTypes
+            .Except(builtinClassTypes).Where(x => !BanClassType.Contains(x)).ToArray();
         return true;
     }
-    [GeneratedRegex("^(?<CamelCase>[A-Z0-9]*[a-z]*)+", RegexOptions.Singleline | RegexOptions.Compiled)]
-    private static partial Regex GetExtractCamelCaseClassNameRegex();
 
     private static string CreateTempDirectory()
     {
@@ -98,7 +91,6 @@ internal static partial class TypeCollector
         Directory.CreateDirectory(tempPath);
         return tempPath;
     }
-    
     private static string CreateDumpDBScript(string tempPath)
     {
         const string dumpDBScript =
@@ -118,7 +110,7 @@ internal static partial class TypeCollector
         File.WriteAllText(scriptFullPath, dumpDBScript);
         return scriptFullPath;
     }
-    
+
     private static string CreateDummyProject(string tempPath)
     {
         var dummyProjectPath = Path.Combine(tempPath, "project");
@@ -131,7 +123,6 @@ internal static partial class TypeCollector
 
         return dummyProjectPath;
     }
-    
     
     private static bool ExtractClassNamesFromStdOut(string resultString, out HashSet<string> builtinClassTypes)
     {
