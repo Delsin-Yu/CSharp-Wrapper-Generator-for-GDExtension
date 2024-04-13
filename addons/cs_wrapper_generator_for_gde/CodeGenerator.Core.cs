@@ -202,34 +202,6 @@ internal static partial class CodeGenerator
         }
     }
 
-    private static void BuildupMethodCallArguments(
-        StringBuilder stringBuilder,
-        PropertyInfo[] propertyInfos,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
-        IReadOnlyDictionary<string, string> godotsharpTypeMap,
-        ICollection<string> builtinTypes
-    )
-    {
-        for (var i = 0; i < propertyInfos.Length; i++)
-        {
-            var propertyInfo = propertyInfos[i];
-            
-            if (gdeTypeMap.TryGetValue(propertyInfo.GetTypeName(), out var gdeClassInfo))
-            {
-                var bassType = GetEngineBaseType(gdeClassInfo, builtinTypes);
-                bassType = godotsharpTypeMap.GetValueOrDefault(bassType, bassType);
-                stringBuilder.Append($"({bassType})");
-            }
-            
-            stringBuilder.Append(propertyInfo.GetArgumentName());
-            
-            if (i != propertyInfos.Length - 1)
-            {
-                stringBuilder.Append(", ");
-            }
-        }
-    }
-
     public static string VariantToTypeName(Variant.Type type, string className) =>
         type switch
         {

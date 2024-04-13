@@ -29,6 +29,11 @@ internal static partial class CodeGenerator
 
         var generateTasks = new Task<(string, string)>[gdeTypeNames.Length];
 
+        foreach (var builtinTypeName in classInheritanceMap.Keys.Select(name => classNameMap.GetValueOrDefault(name, name)).Intersect(godotBuiltinTypeNames).ToArray())
+        {
+            classInheritanceMap.Remove(builtinTypeName);
+        }
+        
         // Run all the generate logic in parallel.
         
         for (var index = 0; index < gdeTypeNames.Length; index++)
