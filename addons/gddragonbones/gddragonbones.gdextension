@@ -20,28 +20,3 @@ linux.x86_32.debug = "bin/libgddragonbones.linux.template_debug.x86_32.so"
 linux.x86_32.release = "bin/libgddragonbones.linux.template_release.x86_32.so"
 windows.x86_64.debug = "bin/libgddragonbones.windows.template_debug.x86_64.dll"
 windows.x86_64.release = "bin/libgddragonbones.windows.template_release.x86_64.dll"
-windows.x86_32.debug = "bin/libgddragonbones.windows.template_debug.x86_32.dll"
-windows.x86_32.release = "bin/libgddragonbones.windows.template_release.x86_32.dll"
-macos.debug = "bin/libgddragonbones.macos.template_debug.framework"
-macos.release = "bin/libgddragonbones.macos.template_release.framework"
-android.debug.arm64 = "bin/libgddragonbones.android.template_debug.arm64.so"
-android.release.arm64 = "bin/libgddragonbones.android.template_release.arm64.so"
-android.debug.x86_64 = "bin/libgddragonbones.android.template_debug.x86_64.so"
-android.release.x86_64 = "bin/libgddragonbones.android.template_release.x86_64.so"
-android.debug.arm32 = "bin/libgddragonbones.android.template_debug.arm32.so"
-android.release.arm32 = "bin/libgddragonbones.android.template_release.arm32.so"
-android.debug.x86_32 = "bin/libgddragonbones.android.template_debug.x86_32.so"
-android.release.x86_32 = "bin/libgddragonbones.android.template_release.x86_32.so"
-ios.debug = "bin/libgddragonbones.ios.template_debug.xcframework"
-ios.release = "bin/libgddragonbones.ios.template_release.xcframework"
-web.debug.wasm32 = "bin/libgddragonbones.web.template_debug.wasm32.wasm"
-web.release.wasm32 = "bin/libgddragonbones.web.template_release.wasm32.wasm"
-
-
-[dependencies]
-ios.debug = {
-  "bin/libgodot-cpp.ios.template_debug.xcframework": ""
-}
-ios.release = {
-  "bin/libgodot-cpp.ios.template_release.xcframework": ""
-}
