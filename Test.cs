@@ -26,7 +26,7 @@ public partial class Test : Node
     {
         // You may directly instantiate all non-nodes
         // GDExtension classes using the constructor 
-        using var summator = new Summator();
+        using var summator = Summator.Instantiate();
         
         // Method calls are supported
         GD.Print(summator.GetTotal());
@@ -37,7 +37,7 @@ public partial class Test : Node
 
         // This Creates a new instance of the
         // underlying GDExtension type.
-        var gdCubismParameterInstance = new GDCubismParameter();
+        var gdCubismParameterInstance = GDCubismParameter.Instantiate();
         GD.Print(gdCubismParameterInstance.DefaultValue);
         gdCubismParameterInstance.DefaultValue = 20;
         GD.Print(gdCubismParameterInstance.DefaultValue);
@@ -50,7 +50,7 @@ public partial class Test : Node
         // This wraps around an existing resource type,
         // the developer should ensure the type for the
         // resources is the matching type.
-        var gdCubismParameterWrapper = new GDCubismParameter(_gdCubismParameter);
+        var gdCubismParameterWrapper = GDCubismParameter.Bind(_gdCubismParameter);
         GD.Print(gdCubismParameterWrapper.DefaultValue);
         gdCubismParameterWrapper.DefaultValue = 20;
         GD.Print(gdCubismParameterWrapper.DefaultValue);
@@ -75,7 +75,7 @@ public partial class Test : Node
         // here is we need to do manual black magic for
         // setting up the wrapper script and the underlying 
         // GDExtension node instance.
-        var joltGeneric6DofJoint3D = JoltGeneric6DOFJoint3D.Construct();
+        var joltGeneric6DofJoint3D = JoltGeneric6DOFJoint3D.Instantiate();
         AddChild(joltGeneric6DofJoint3D);
         GD.Print(joltGeneric6DofJoint3D.AngularLimitYEnabled);
         joltGeneric6DofJoint3D.AngularLimitYEnabled = false;

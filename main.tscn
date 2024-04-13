@@ -4,7 +4,6 @@
 [ext_resource type="Script" path="res://GDExtensionWrappers/GDCubismUserModel.cs" id="2_l5ob7"]
 
 [sub_resource type="GDCubismParameter" id="GDCubismParameter_qup6x"]
-minimum_value = 4.59051e-41
 maximum_value = 0.0
 default_value = 0.0
 value = 1.72554e-19
