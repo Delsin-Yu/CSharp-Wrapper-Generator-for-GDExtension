@@ -163,7 +163,7 @@ internal static partial class CodeGenerator
                   
                   {{TAB1}}public {{displayTypeName}}({{baseType}} {{backingArgument}}) => {{backingName}} = {{backingArgument}};
                   
-                  {{TAB1}}public static  explicit operator {{displayTypeName}}(Variant variant) => new(variant.As<{{baseType}}>());
+                  {{TAB1}}public static explicit operator {{displayTypeName}}(Variant variant) => new(variant.As<{{baseType}}>());
                   
                   {{TAB1}}public static implicit operator {{baseType}}({{displayTypeName}} instance) => instance.{{backingName}};
                   
