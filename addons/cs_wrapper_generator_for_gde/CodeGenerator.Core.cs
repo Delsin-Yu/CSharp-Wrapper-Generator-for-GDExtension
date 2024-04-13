@@ -281,6 +281,8 @@ internal static partial class CodeGenerator
     [GeneratedRegex(@"[0-9]+")]
     private static partial Regex EscapeNameDigitRegex();
 
+
+    // TODO: Split escape types, some of these keywords are actually valid method argument name.
     private static readonly HashSet<string> _csKeyword =
     [
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const",
