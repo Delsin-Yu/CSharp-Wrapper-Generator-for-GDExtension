@@ -43,6 +43,12 @@ internal static partial class CodeGenerator
                 occupiedNames.Add(methodName);
             }
 
+            stringBuilder.AppendLine($"""
+                                      /*
+                                      {methodInfo}
+                                      */
+                                      """);
+            
             stringBuilder
                 .Append($"{TAB1}public ");
 

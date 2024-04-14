@@ -147,7 +147,9 @@ internal static partial class CodeGenerator
         
         public string GetTypeName()
         {
-            return VariantToTypeName(Type, Type == Variant.Type.Object ? HintString : ClassName);
+            // var key = string.IsNullOrWhiteSpace(ClassName) ? HintString : ClassName;
+            // key = string.IsNullOrWhiteSpace(key) ? NativeName : key;
+            return VariantToTypeName(Type, ClassName);
         }
 
         public string GetPropertyName() => EscapeAndFormatName(NativeName);
@@ -195,6 +197,22 @@ internal static partial class CodeGenerator
         }
         
         public string GetMethodName() => EscapeAndFormatName(NativeName);
+
+        public override string ToString() => $"""
+                                              MethodInfo;
+                                              {TAB1}{nameof(NativeName)}: {NativeName}, 
+                                              {TAB1}{nameof(ReturnValue)}: {ReturnValue}, 
+                                              {TAB1}{nameof(Flags)}: {Flags}, 
+                                              {TAB1}{nameof(Id)}: {Id}, 
+                                              {TAB1}{nameof(Arguments)}: 
+                                              {TAB2}[
+                                              {string.Join(',', Arguments.Select(x => TAB3 + x.ToString().ReplaceLineEndings($"\n{TAB3}")))}
+                                              {TAB2}], 
+                                              {TAB1}{nameof(DefaultArguments)}: 
+                                              {TAB2}[
+                                              {string.Join(',', DefaultArguments.Select(x => TAB3 + x.ToString().ReplaceLineEndings($"\n{TAB3}")))}
+                                              {TAB2}]
+                                              """;
     }
 
     private static string GetEngineBaseType(ClassInfo gdeTypeInfo, ICollection<string> builtinTypes)
