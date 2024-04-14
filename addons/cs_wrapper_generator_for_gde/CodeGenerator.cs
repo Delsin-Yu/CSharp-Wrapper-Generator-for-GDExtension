@@ -29,7 +29,23 @@ internal static partial class CodeGenerator
 
         var generateTasks = new Task<(string, string)>[gdeTypeNames.Length];
 
-        foreach (var builtinTypeName in classInheritanceMap.Keys.Select(name => classNameMap.GetValueOrDefault(name, name)).Intersect(godotBuiltinTypeNames).ToArray())
+        var nonGdeTypes = new List<string>();
+        foreach (var gdeNameCandidate in classInheritanceMap.Keys)
+        {
+            var nameCandidate = gdeNameCandidate;
+            if (godotBuiltinTypeNames.Contains(nameCandidate))
+            {
+                nonGdeTypes.Add(nameCandidate);
+                continue;
+            }
+            nameCandidate = classNameMap.GetValueOrDefault(nameCandidate, nameCandidate);
+            if (godotBuiltinTypeNames.Contains(nameCandidate))
+            {
+                nonGdeTypes.Add(nameCandidate);
+            }
+        }
+        
+        foreach (var builtinTypeName in nonGdeTypes)
         {
             classInheritanceMap.Remove(builtinTypeName);
         }

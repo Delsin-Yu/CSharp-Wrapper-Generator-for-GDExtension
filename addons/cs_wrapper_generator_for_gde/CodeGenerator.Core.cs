@@ -188,7 +188,7 @@ internal static partial class CodeGenerator
         }
     }
 
-    private static void BuildupMethodArguments(StringBuilder stringBuilder, PropertyInfo[] propertyInfos)
+    private static void BuildupMethodArguments(StringBuilder stringBuilder, PropertyInfo[] propertyInfos, IReadOnlyDictionary<string, string> godotsharpTypeNameMap)
     {
         for (var i = 0; i < propertyInfos.Length; i++)
         {
@@ -197,6 +197,10 @@ internal static partial class CodeGenerator
             if (propertyInfo.IsVoid && propertyInfo.Usage.HasFlag(PropertyUsageFlags.NilIsVariant))
             {
                 typeName = "Variant?";
+            }
+            else
+            {
+                typeName = godotsharpTypeNameMap.GetValueOrDefault(typeName, typeName);
             }
             stringBuilder
                 .Append(typeName)

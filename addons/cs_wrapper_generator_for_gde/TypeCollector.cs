@@ -73,14 +73,16 @@ internal static partial class TypeCollector
             GD.PrintErr("Error when extracting builtin class names!");
             return false;
         }
-
+        
         // GDExtension types are the difference
         // between the builtin types and the types
         // existing in the current project's ClassDB. 
         var currentClassTypes = ClassDB.GetClassList();
         godotBuiltinTypeNames = builtinClassTypes;
         gdeClassTypes = currentClassTypes
-            .Except(builtinClassTypes).Where(x => !BanClassType.Contains(x)).ToArray();
+            .Except(builtinClassTypes)
+            .Except(BanClassType)
+            .ToArray();
         return true;
     }
 

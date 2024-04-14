@@ -58,7 +58,7 @@ internal static partial class CodeGenerator
                 .Append(methodName)
                 .Append('(');
 
-            BuildupMethodArguments(stringBuilder, methodInfo.Arguments);
+            BuildupMethodArguments(stringBuilder, methodInfo.Arguments, godotSharpTypeNameMap);
 
             stringBuilder.Append(')');
             

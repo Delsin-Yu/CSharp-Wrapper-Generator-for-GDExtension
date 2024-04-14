@@ -48,7 +48,7 @@ internal static partial class CodeGenerator
 
             codeBuilder.Append($"{TAB1}public delegate {returnValueName} {signalDelegateName}(");
 
-            BuildupMethodArguments(codeBuilder, signalInfo.Arguments);
+            BuildupMethodArguments(codeBuilder, signalInfo.Arguments, godotSharpTypeNameMap);
 
             codeBuilder
                 .AppendLine(");")
