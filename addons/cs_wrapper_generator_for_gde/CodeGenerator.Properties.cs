@@ -30,7 +30,7 @@ internal static partial class CodeGenerator
             var typeName = propertyInfo.GetTypeName();
 
             godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
-
+            
             var propertyName = propertyInfo.GetPropertyName();
 
             if (occupiedNames.Contains(propertyName))
@@ -41,14 +41,29 @@ internal static partial class CodeGenerator
             {
                 occupiedNames.Add(propertyName);
             }
-
-            stringBuilder
-                .AppendLine($"{TAB1}public {typeName} {propertyName}")
-                .AppendLine($"{TAB1}{{")
-                .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
-                .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
-                .AppendLine($"{TAB1}}}")
-                .AppendLine();
+            
+            if (propertyInfo.IsVoid)
+            {
+                //   get => Get("saved_value") is { VariantType: not Variant.Type.Nil } _result ? _result : (Variant?)null;
+                //   set => {backing}Set("{propertyInfo.NativeName}", value is not null ? Variant.From(value) : new Variant());
+                stringBuilder
+                    .AppendLine($"{TAB1}public Variant? {propertyName}")
+                    .AppendLine($"{TAB1}{{")
+                    .AppendLine($$"""{{TAB2}}get => {{backing}}Get("{{propertyInfo.NativeName}}") is { VariantType: not Variant.Type.Nil } _result ? _result : (Variant?)null;""")
+                    .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", value is not null ? Variant.From(value) : new Variant());""")
+                    .AppendLine($"{TAB1}}}")
+                    .AppendLine();
+            }
+            else
+            {
+                stringBuilder
+                    .AppendLine($"{TAB1}public {typeName} {propertyName}")
+                    .AppendLine($"{TAB1}{{")
+                    .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
+                    .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
+                    .AppendLine($"{TAB1}}}")
+                    .AppendLine();
+            }
         }
 
         if (propertyInfos.Count != 0)

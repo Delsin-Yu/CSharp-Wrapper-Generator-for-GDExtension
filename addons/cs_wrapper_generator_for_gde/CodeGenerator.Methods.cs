@@ -139,8 +139,12 @@ internal static partial class CodeGenerator
                 bassType = godotsharpTypeMap.GetValueOrDefault(bassType, bassType);
                 stringBuilder.Append($"({bassType})");
             }
-            
-            stringBuilder.Append(propertyInfo.GetArgumentName());
+            var argumentName = propertyInfo.GetArgumentName();
+            if (propertyInfo.IsVoid && propertyInfo.Usage.HasFlag(PropertyUsageFlags.NilIsVariant))
+            {
+                argumentName += " ?? new Variant()";
+            }
+            stringBuilder.Append(argumentName);
             
             if (i != propertyInfos.Length - 1)
             {
