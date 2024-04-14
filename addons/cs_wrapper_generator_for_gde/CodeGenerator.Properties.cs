@@ -41,7 +41,14 @@ internal static partial class CodeGenerator
             {
                 occupiedNames.Add(propertyName);
             }
-            
+
+            stringBuilder.AppendLine($"""
+                                      /*
+                                      {propertyInfo}
+                                      */
+                                      """
+                                      );
+
             if (propertyInfo.IsVoid)
             {
                 //   get => Get("saved_value") is { VariantType: not Variant.Type.Nil } _result ? _result : (Variant?)null;

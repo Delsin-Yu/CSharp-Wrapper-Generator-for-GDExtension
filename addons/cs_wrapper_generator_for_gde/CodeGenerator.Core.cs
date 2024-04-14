@@ -145,9 +145,27 @@ internal static partial class CodeGenerator
         public bool IsGroupOrSubgroup => Usage.HasFlag(PropertyUsageFlags.Group) || Usage.HasFlag(PropertyUsageFlags.Subgroup);
         public bool IsVoid => Type is Variant.Type.Nil;
         
-        public string GetTypeName() => VariantToTypeName(Type, ClassName);
+        public string GetTypeName()
+        {
+            return VariantToTypeName(Type, Type == Variant.Type.Object ? HintString : ClassName);
+        }
+
         public string GetPropertyName() => EscapeAndFormatName(NativeName);
+
         public string GetArgumentName() => EscapeAndFormatName(NativeName, true);
+
+        public override string ToString() =>
+            $"""
+             PropertyInfo:
+             {TAB1}{nameof(Type)}: {Type}
+             {TAB1}{nameof(NativeName)}: {NativeName}
+             {TAB1}{nameof(ClassName)}: {ClassName}
+             {TAB1}{nameof(Hint)}: {Hint}
+             {TAB1}{nameof(HintString)}: {HintString}
+             {TAB1}{nameof(Usage)}: {Usage}
+             {TAB1}{nameof(IsGroupOrSubgroup)}: {IsGroupOrSubgroup}
+             {TAB1}{nameof(IsVoid)}: {IsVoid}
+             """;
     }
 
     private readonly struct MethodInfo
@@ -279,9 +297,11 @@ internal static partial class CodeGenerator
         "descending", "equals", "from", "get", "global", "group", "into", "join", "let", "nameof", "on", "orderby",
         "partial", "remove", "select", "set", "when", "where", "yield"
     ];
-    
-    public static string EscapeAndFormatName(string sourceName, bool camelCase = false)
+
+    private static string EscapeAndFormatName(string sourceName, bool camelCase = false)
     {
+        ArgumentOutOfRangeException.ThrowIfNullOrEmpty(sourceName);
+        
         var name = EscapeNameRegex()
             .Replace(sourceName, "_")
             .ToPascalCase();
