@@ -193,8 +193,13 @@ internal static partial class CodeGenerator
         for (var i = 0; i < propertyInfos.Length; i++)
         {
             var propertyInfo = propertyInfos[i];
+            var typeName = propertyInfo.GetTypeName();
+            if (propertyInfo.IsVoid && propertyInfo.Usage.HasFlag(PropertyUsageFlags.NilIsVariant))
+            {
+                typeName = "Variant?";
+            }
             stringBuilder
-                .Append(propertyInfo.GetTypeName())
+                .Append(typeName)
                 .Append(' ')
                 .Append(propertyInfo.GetArgumentName());
 
