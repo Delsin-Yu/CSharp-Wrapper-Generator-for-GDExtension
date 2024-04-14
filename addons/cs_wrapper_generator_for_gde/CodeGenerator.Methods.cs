@@ -16,15 +16,16 @@ internal static partial class CodeGenerator
         string backing
     )
     {
-        if (methodInfoList.Count != 0)
+        if (methodInfoList.Count == 0)
         {
-            stringBuilder.AppendLine(
-                """
-                #region Methods
-
-                """
-            );
+            return;
         }
+        stringBuilder.AppendLine(
+            """
+            #region Methods
+
+            """
+        );
 
 
         foreach (var methodInfo in methodInfoList)
@@ -116,15 +117,12 @@ internal static partial class CodeGenerator
         }
 
 
-        if (methodInfoList.Count != 0)
-        {
-            stringBuilder.AppendLine(
-                """
-                #endregion
+        stringBuilder.AppendLine(
+            """
+            #endregion
 
-                """
-            );
-        }
+            """
+        );
     }
 
     private static void BuildupMethodCallArguments(
