@@ -124,6 +124,7 @@ internal static partial class CodeGenerator
         public readonly PropertyHint Hint = PropertyHint.None;
         public readonly string HintString;
         public readonly PropertyUsageFlags Usage = PropertyUsageFlags.Default;
+        public readonly string TypeClass;
 
         public PropertyInfo(Dictionary dictionary)
         {
@@ -140,6 +141,7 @@ internal static partial class CodeGenerator
             Hint = hintInfo.As<PropertyHint>();
             HintString = hintStringInfo.AsString();
             Usage = usageInfo.As<PropertyUsageFlags>();
+            TypeClass = ((string[])[ClassName, HintString,"Variant"]).First(x=>!string.IsNullOrWhiteSpace(x));
         }
 
         public bool IsGroupOrSubgroup => Usage.HasFlag(PropertyUsageFlags.Group) || Usage.HasFlag(PropertyUsageFlags.Subgroup);
@@ -149,7 +151,7 @@ internal static partial class CodeGenerator
         {
             // var key = string.IsNullOrWhiteSpace(ClassName) ? HintString : ClassName;
             // key = string.IsNullOrWhiteSpace(key) ? NativeName : key;
-            return VariantToTypeName(Type, ClassName);
+            return VariantToTypeName(Type, TypeClass);
         }
 
         public string GetPropertyName() => EscapeAndFormatName(NativeName);
@@ -167,6 +169,7 @@ internal static partial class CodeGenerator
              {TAB1}{nameof(Usage)}: {Usage}
              {TAB1}{nameof(IsGroupOrSubgroup)}: {IsGroupOrSubgroup}
              {TAB1}{nameof(IsVoid)}: {IsVoid}
+             {TAB1}{nameof(TypeClass)}: {TypeClass}
              """;
     }
 

@@ -14,15 +14,18 @@ internal static partial class CodeGenerator
         ClassInfo gdeTypeInfo
     )
     {
-        if (enumList.Count != 0)
+        if (enumList.Count == 0)
         {
-            codeBuilder.AppendLine(
-                """
-                #region Enums
-
-                """
-            );
+            return;
         }
+        
+        codeBuilder.AppendLine(
+            """
+            #region Enums
+
+            """
+        );
+        
 
         foreach (var enumName in enumList)
         {
@@ -65,14 +68,11 @@ internal static partial class CodeGenerator
                 .AppendLine();
         }
 
-        if (enumList.Count != 0)
-        {
-            codeBuilder.AppendLine(
-                """
-                #endregion
+        codeBuilder.AppendLine(
+            """
+            #endregion
 
-                """
-            );
-        }
+            """
+        );
     }
 }

@@ -13,15 +13,17 @@ internal static partial class CodeGenerator
         string backing
     )
     {
-        if (propertyInfos.Count != 0)
+        if (propertyInfos.Count == 0)
         {
-            stringBuilder.AppendLine(
-                """
-                #region Properties
-
-                """
-            );
+            return;
         }
+
+        stringBuilder.AppendLine(
+            """
+            #region Properties
+
+            """
+        );
 
         foreach (var propertyInfo in propertyInfos)
         {
@@ -29,8 +31,8 @@ internal static partial class CodeGenerator
 
             var typeName = propertyInfo.GetTypeName();
 
-            godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
-            
+            typeName = godotSharpTypeNameMap.GetValueOrDefault(typeName, typeName);
+
             var propertyName = propertyInfo.GetPropertyName();
 
             if (occupiedNames.Contains(propertyName))
@@ -60,27 +62,24 @@ internal static partial class CodeGenerator
                     .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", value is not null ? Variant.From(value) : new Variant());""")
                     .AppendLine($"{TAB1}}}")
                     .AppendLine();
+                
+                continue;
             }
-            else
-            {
-                stringBuilder
-                    .AppendLine($"{TAB1}public {typeName} {propertyName}")
-                    .AppendLine($"{TAB1}{{")
-                    .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
-                    .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
-                    .AppendLine($"{TAB1}}}")
-                    .AppendLine();
-            }
+            
+            stringBuilder
+                .AppendLine($"{TAB1}public {typeName} {propertyName}")
+                .AppendLine($"{TAB1}{{")
+                .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
+                .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
+                .AppendLine($"{TAB1}}}")
+                .AppendLine();
         }
 
-        if (propertyInfos.Count != 0)
-        {
-            stringBuilder.AppendLine(
-                """
-                #endregion
+        stringBuilder.AppendLine(
+            """
+            #endregion
 
-                """
-            );
-        }
+            """
+        );
     }
 }
