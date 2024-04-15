@@ -69,7 +69,7 @@ internal static partial class CodeGenerator
               {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the Construct() method instead.")]
               {{TAB1}}protected {{displayTypeName}}() { }
               
-              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(Variant variant)
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(Variant variant, {{METHOD_BLOCKER}})
               {{TAB1}}{
               {{TAB2}}var godotObject = variant.As<GodotObject>();
               {{TAB2}}var instanceId = godotObject.GetInstanceId();
@@ -77,7 +77,7 @@ internal static partial class CodeGenerator
               {{TAB2}}return ({{displayTypeName}})InstanceFromId(instanceId);
               {{TAB1}}}
               
-              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Instantiate() =>
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Instantiate({{METHOD_BLOCKER}}) =>
               {{TAB2}}{{VariantToInstanceMethodName}}(ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}"));
               
               """
@@ -112,7 +112,7 @@ internal static partial class CodeGenerator
         ConstructEnums(occupiedNames, enumInfoList, codeBuilder, gdeTypeInfo);
         ConstructSignals(occupiedNames, signalInfoList, codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
         ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
-        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, codeBuilder, backingName);
+        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, codeBuilder, gdeTypeInfo, backingName);
     }
 
 
@@ -242,6 +242,7 @@ internal static partial class CodeGenerator
                 typeName = godotsharpTypeNameMap.GetValueOrDefault(typeName, typeName);
             }
             stringBuilder
+                .Append("in ")
                 .Append(typeName)
                 .Append(' ')
                 .Append(propertyInfo.GetArgumentName());

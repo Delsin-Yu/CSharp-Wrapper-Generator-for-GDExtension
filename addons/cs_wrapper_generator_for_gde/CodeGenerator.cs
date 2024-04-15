@@ -8,7 +8,7 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class CodeGenerator
 {
-    internal static (string fileName, string fileContent)[] GenerateWrappersForGDETypes(string[] gdeTypeNames, ICollection<string> godotBuiltinTypeNames)
+    internal static IReadOnlyList<(string fileName, string fileContent)> GenerateWrappersForGDETypes(string[] gdeTypeNames, ICollection<string> godotBuiltinTypeNames)
     {
         // Certain types are named differently in C#,
         // such as GodotObject(C#) vs Object(Native),
@@ -58,10 +58,41 @@ internal static partial class CodeGenerator
             generateTasks[index] = Task.Run(() => GenerateSourceCodeForType(gdeTypeInfo, classNameMap, classInheritanceMap, godotBuiltinTypeNames));
         }
 
-        var whenAll = Task.WhenAll(generateTasks);
-        return whenAll.Result;
+        var generated = Task.WhenAll(generateTasks).Result.ToList();
+        generated.Add(GenerateStaticHelper());
+        return generated;
     }
 
+
+    private const string STATIC_HELPER_CLASS = "StaticMethod";
+    private const string METHOD_BLOCKER = "in int? _ = null";
+
+    private static (string, string) GenerateStaticHelper()
+    {
+        var sourceCode =
+            $$"""
+            using Godot;
+            
+            public static class {{STATIC_HELPER_CLASS}}
+            {
+                private static readonly System.Collections.Generic.Dictionary<string, GodotObject> _instances = [];
+            
+                public static Variant Call(string className, string method, params Variant[] arguments)
+                {
+                    if (!_instances.TryGetValue(className, out var instance))
+                    {
+                        instance = ClassDB.Instantiate(className).AsGodotObject();
+                        _instances[className] = instance;
+                    }
+            
+                    return instance.Call(method, arguments);
+                }
+            }
+            """;
+
+        return (STATIC_HELPER_CLASS, sourceCode);
+    }
+    
     private static Dictionary<string, string> GetGodotSharpTypeNameMap()
     {
         return typeof(GodotObject)

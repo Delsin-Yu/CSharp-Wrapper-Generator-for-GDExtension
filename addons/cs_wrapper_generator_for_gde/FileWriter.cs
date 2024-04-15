@@ -1,10 +1,11 @@
-﻿using Godot;
+﻿using System.Collections.Generic;
+using Godot;
 
 namespace GDExtensionAPIGenerator;
 
 internal static class FileWriter
 {
-    internal static void WriteResult((string fileName, string fileContent)[] codes)
+    internal static void WriteResult(IReadOnlyList<(string fileName, string fileContent)> codes)
     {
         DirAccess.MakeDirAbsolute(GeneratorMain.WRAPPERS_PATH);
         

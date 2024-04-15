@@ -13,6 +13,7 @@ internal static partial class CodeGenerator
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         ICollection<string> builtinTypeNames,
         StringBuilder stringBuilder,
+        ClassInfo classInfo,
         string backing
     )
     {
@@ -79,11 +80,24 @@ internal static partial class CodeGenerator
                 stringBuilder.Append($"{returnTypeInfo.TypeName}.{VariantToInstanceMethodName}(");
             }
 
-            stringBuilder
-                .Append(backing)
-                .Append("Call(\"")
-                .Append(methodNativeName)
-                .Append('"');
+            if (isStatic)
+            {
+                stringBuilder
+                    .Append($"{STATIC_HELPER_CLASS}.")
+                    .Append("Call(\"")
+                    .Append(classInfo.TypeName)
+                    .Append("\", \"")
+                    .Append(methodNativeName)
+                    .Append('"');
+            }
+            else
+            {
+                stringBuilder
+                    .Append(backing)
+                    .Append("Call(\"")
+                    .Append(methodNativeName)
+                    .Append('"');
+            }
 
             if (methodInfo.Arguments.Length > 0)
             {
