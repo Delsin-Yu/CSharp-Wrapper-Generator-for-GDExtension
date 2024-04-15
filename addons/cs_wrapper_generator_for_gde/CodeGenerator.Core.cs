@@ -146,13 +146,9 @@ internal static partial class CodeGenerator
 
         public bool IsGroupOrSubgroup => Usage.HasFlag(PropertyUsageFlags.Group) || Usage.HasFlag(PropertyUsageFlags.Subgroup);
         public bool IsVoid => Type is Variant.Type.Nil;
+        public bool IsEnum => Hint is PropertyHint.Enum;
         
-        public string GetTypeName()
-        {
-            // var key = string.IsNullOrWhiteSpace(ClassName) ? HintString : ClassName;
-            // key = string.IsNullOrWhiteSpace(key) ? NativeName : key;
-            return VariantToTypeName(Type, TypeClass);
-        }
+        public string GetTypeName() => VariantToTypeName(Type, Hint, TypeClass);
 
         public string GetPropertyName() => EscapeAndFormatName(NativeName);
 
@@ -254,7 +250,7 @@ internal static partial class CodeGenerator
         }
     }
 
-    public static string VariantToTypeName(Variant.Type type, string className) =>
+    public static string VariantToTypeName(Variant.Type type, PropertyHint hint, string className) =>
         type switch
         {
             Variant.Type.Aabb => "Aabb",
@@ -289,7 +285,7 @@ internal static partial class CodeGenerator
             Variant.Type.PackedVector3Array => "Vector3[]",
             Variant.Type.PackedColorArray => "Color[]",
             Variant.Type.Bool => "bool",
-            Variant.Type.Int => "int",
+            Variant.Type.Int => hint is not PropertyHint.Enum ? "int" : (string.IsNullOrWhiteSpace(className) ? "UNDEFINED_ENUM" : className),
             Variant.Type.Float => "float",
             Variant.Type.String => "string",
             Variant.Type.Object => className,

@@ -150,19 +150,37 @@ internal static partial class CodeGenerator
         for (var i = 0; i < propertyInfos.Length; i++)
         {
             var propertyInfo = propertyInfos[i];
+
+            var propertyTypeName = propertyInfo.GetTypeName();
             
-            if (gdeTypeMap.TryGetValue(propertyInfo.GetTypeName(), out var gdeClassInfo))
+            if (gdeTypeMap.TryGetValue(propertyTypeName, out var gdeClassInfo))
             {
                 var bassType = GetEngineBaseType(gdeClassInfo, builtinTypes);
                 bassType = godotsharpTypeMap.GetValueOrDefault(bassType, bassType);
                 stringBuilder.Append($"({bassType})");
             }
             var argumentName = propertyInfo.GetArgumentName();
+            
             if (propertyInfo.IsVoid && propertyInfo.Usage.HasFlag(PropertyUsageFlags.NilIsVariant))
             {
-                argumentName += " ?? new Variant()";
+                stringBuilder
+                    .Append(argumentName)
+                    .Append(" ?? new Variant()");
             }
-            stringBuilder.Append(argumentName);
+            else if (propertyInfo.IsEnum)
+            {
+                stringBuilder
+                    .Append("Variant.From<")
+                    .Append(propertyTypeName)
+                    .Append(">(")
+                    .Append(argumentName)
+                    .Append(')');
+            }
+            else
+            {
+                stringBuilder.Append(argumentName);
+            }
+            
             
             if (i != propertyInfos.Length - 1)
             {
