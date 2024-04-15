@@ -1,0 +1,7 @@
+[configuration]
+entry_symbol = "luaAPI_library_init"
+compatibility_minimum = 4.2
+
+[libraries]
+windows.x86_64.debug = "bin/libluaapi.windows.template_debug.x86_64.dll"
+windows.x86_64.release = "bin/libluaapi.windows.template_release.x86_64.dll"

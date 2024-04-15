@@ -10,7 +10,7 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class TypeCollector
 {
-    public static HashSet<string> BanClassType =
+    public static readonly HashSet<string> BanClassType =
     [
         "CodeTextEditor",
         "ConnectionInfoDialog",
