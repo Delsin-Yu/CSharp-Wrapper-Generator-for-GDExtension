@@ -242,7 +242,7 @@ internal static partial class CodeGenerator
                 typeName = godotsharpTypeNameMap.GetValueOrDefault(typeName, typeName);
             }
             stringBuilder
-                //.Append("in ")
+                .Append("in ")
                 .Append(typeName)
                 .Append(' ')
                 .Append(propertyInfo.GetArgumentName());
