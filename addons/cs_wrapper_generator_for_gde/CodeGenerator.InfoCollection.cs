@@ -71,7 +71,7 @@ internal static partial class CodeGenerator
             )
             .ToArray();
 
-    private static IReadOnlyList<string> CollectionEnumInfo(ClassInfo gdeTypeInfo) =>
+    private static IReadOnlyList<string> CollectEnumInfo(ClassInfo gdeTypeInfo) =>
         ClassDB
             .ClassGetEnumList(gdeTypeInfo.TypeName, true)
             .Select(x => EscapeAndFormatName(x))

@@ -113,7 +113,7 @@ internal static partial class CodeGenerator
         var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
         var methodInfoList = CollectMethodInfo(gdeTypeInfo, propertyInfoList);
         var signalInfoList = CollectSignalInfo(gdeTypeInfo);
-        var enumInfoList = CollectionEnumInfo(gdeTypeInfo);
+        var enumInfoList = CollectEnumInfo(gdeTypeInfo);
         var occupiedNames = new HashSet<string>();
         var enumsBuilder = new StringBuilder();
         var signalsBuilder = new StringBuilder();
