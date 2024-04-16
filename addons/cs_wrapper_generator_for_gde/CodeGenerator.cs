@@ -73,22 +73,9 @@ internal static partial class CodeGenerator
         var generated = Task.WhenAll(generateTasks).Result.ToList();
         generated.Add(GenerateStaticHelper());
 
-        // TODO: Add builtin enum maps.
-        
-        // StringName[] builtinEnums = ["Variant.Type", "Variant.Operator"];
-        //
-        // foreach (var variantClassName in builtinEnums)
-        // {
-        //     var variantEnumList = ClassDB.ClassGetEnumList(variantClassName);
-        //     foreach (var variantEnumName in variantEnumList)
-        //     {
-        //         var enumConstants = ClassDB.ClassGetEnumConstants(variantClassName, variantEnumName);
-        //         foreach (var enumConstant in enumConstants)
-        //         {
-        //             enumNameToConstantMap[enumConstant] = variantClassName;
-        //         }
-        //     }
-        // }
+        PopulateBuiltinEnumTypes(enumNameToConstantMap);
+
+        GD.Print(string.Join('\n', enumNameToConstantMap.Select(x => $"{x.Key}, {x.Value}")));
         
         var span = CollectionsMarshal.AsSpan(generated);
 
