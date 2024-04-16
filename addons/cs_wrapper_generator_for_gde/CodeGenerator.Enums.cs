@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using Godot;
@@ -11,7 +12,8 @@ internal static partial class CodeGenerator
         ICollection<string> occupiedNames,
         IReadOnlyList<string> enumList,
         StringBuilder codeBuilder,
-        ClassInfo gdeTypeInfo
+        ClassInfo gdeTypeInfo,
+        ConcurrentDictionary<string, string> enumNameToConstantMap
     )
     {
         if (enumList.Count == 0)
@@ -52,6 +54,7 @@ internal static partial class CodeGenerator
 
             foreach (var enumConstant in enumConstants)
             {
+                enumNameToConstantMap.TryAdd(enumConstant, enumFormatName);
                 var enumIntValue = ClassDB.ClassGetIntegerConstant(gdeTypeInfo.TypeName, enumConstant);
 
                 var formatEnumConstant = EscapeAndFormatName(enumConstant);

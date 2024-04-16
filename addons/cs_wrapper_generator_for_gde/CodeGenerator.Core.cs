@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,15 +15,17 @@ internal static partial class CodeGenerator
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
-        ICollection<string> godotBuiltinClassNames
-
-    )
+        ICollection<string> godotBuiltinClassNames,
+        ConcurrentDictionary<string, string> enumNameToConstantMap)
     {
-        var codeBuilder = new StringBuilder();
-
-        GenerateCode(codeBuilder, gdeTypeInfo, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames);
-
-        return (gdeTypeInfo.TypeName, codeBuilder.ToString());
+        var builtCode = GenerateCode(
+            gdeTypeInfo,
+            gdeTypeMap,
+            godotSharpTypeNameMap,
+            godotBuiltinClassNames,
+            enumNameToConstantMap
+        );
+        return (gdeTypeInfo.TypeName, builtCode);
     }
 
     private const string TAB1 = "    ";
@@ -34,28 +37,28 @@ internal static partial class CodeGenerator
     private const string NAMESPACE = "GDExtension.Wrappers";
     private const string VariantToInstanceMethodName = "Bind";
 
-    private static void GenerateCode(
-        StringBuilder codeBuilder,
+    private static string GenerateCode(
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
-        ICollection<string> godotBuiltinClassNames
-    )
+        ICollection<string> godotBuiltinClassNames,
+        ConcurrentDictionary<string, string> enumNameToConstantMap)
     {
+        var codeBuilder = new StringBuilder();
         var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
         var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
 
         var isAbstract = !ClassDB.CanInstantiate(gdeTypeInfo.TypeName);
-        
+
         var engineBaseType = GetEngineBaseType(gdeTypeInfo, godotBuiltinClassNames);
-        
+
         var isRootWrapper = gdeTypeInfo.ParentType.TypeName == engineBaseType || godotBuiltinClassNames.Contains(gdeTypeInfo.ParentType.TypeName);
 
         engineBaseType = godotSharpTypeNameMap.GetValueOrDefault(engineBaseType, engineBaseType);
-        
+
         var abstractKeyWord = isAbstract ? "abstract " : string.Empty;
         var newKeyWord = isRootWrapper ? string.Empty : "new ";
-        
+
         codeBuilder.AppendLine(
             $$"""
               using System;
@@ -65,10 +68,10 @@ internal static partial class CodeGenerator
 
               public {{abstractKeyWord}}partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
-              
+
               {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the Construct() method instead.")]
               {{TAB1}}protected {{displayTypeName}}() { }
-              
+
               {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(Variant variant, {{METHOD_BLOCKER}})
               {{TAB1}}{
               {{TAB2}}var godotObject = variant.As<GodotObject>();
@@ -76,10 +79,10 @@ internal static partial class CodeGenerator
               {{TAB2}}godotObject.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
               {{TAB2}}return ({{displayTypeName}})InstanceFromId(instanceId);
               {{TAB1}}}
-              
+
               {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Instantiate({{METHOD_BLOCKER}}) =>
               {{TAB2}}{{VariantToInstanceMethodName}}(ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}"));
-              
+
               """
         );
 
@@ -89,9 +92,11 @@ internal static partial class CodeGenerator
             gdeTypeMap,
             godotSharpTypeNameMap,
             godotBuiltinClassNames,
+            enumNameToConstantMap,
             string.Empty
         );
-        codeBuilder.Append('}');
+
+        return codeBuilder.Append('}').ToString();
     }
 
 
@@ -101,6 +106,7 @@ internal static partial class CodeGenerator
         IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames,
+        ConcurrentDictionary<string, string> enumConstantMap,
         string backingName
     )
     {
@@ -109,13 +115,30 @@ internal static partial class CodeGenerator
         var signalInfoList = CollectSignalInfo(gdeTypeInfo);
         var enumInfoList = CollectionEnumInfo(gdeTypeInfo);
         var occupiedNames = new HashSet<string>();
-        ConstructEnums(occupiedNames, enumInfoList, codeBuilder, gdeTypeInfo);
-        ConstructSignals(occupiedNames, signalInfoList, codeBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
-        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, codeBuilder, backingName);
-        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, codeBuilder, gdeTypeInfo, backingName);
+        var enumsBuilder = new StringBuilder();
+        var signalsBuilder = new StringBuilder();
+        var propertiesBuilder = new StringBuilder();
+        var methodsBuilder = new StringBuilder();
+        
+        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, propertiesBuilder, backingName);
+        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, methodsBuilder, gdeTypeInfo, backingName);
+        ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
+        ConstructEnums(occupiedNames, enumInfoList, enumsBuilder, gdeTypeInfo, enumConstantMap);
+
+        codeBuilder
+            .Append(enumsBuilder)
+            .Append(propertiesBuilder)
+            .Append(signalsBuilder)
+            .Append(methodsBuilder);
     }
 
+    private const string UNRESOLVED_ENUM_HINT = "ENUM_HINT";
+    private const string UNRESOLVED_ENUM_TEMPLATE = $"<UNRESOLVED_ENUM_TYPE>{UNRESOLVED_ENUM_HINT}</UNRESOLVED_ENUM_TYPE>";
 
+    [GeneratedRegex(@"<UNRESOLVED_ENUM_TYPE>(?<EnumConstants>.*)<\/UNRESOLVED_ENUM_TYPE>")]
+    private static partial Regex GetExtractUnResolvedEnumValueRegex();
+    
+    
     private readonly struct PropertyInfo
     {
         public readonly Variant.Type Type = Variant.Type.Nil;
@@ -141,7 +164,17 @@ internal static partial class CodeGenerator
             Hint = hintInfo.As<PropertyHint>();
             HintString = hintStringInfo.AsString();
             Usage = usageInfo.As<PropertyUsageFlags>();
-            TypeClass = ((string[])[ClassName, HintString,"Variant"]).First(x=>!string.IsNullOrWhiteSpace(x));
+            if (Hint is PropertyHint.Enum && Type is Variant.Type.Int)
+            {
+                var enumCandidates = HintString.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                TypeClass = UNRESOLVED_ENUM_TEMPLATE.Replace(UNRESOLVED_ENUM_HINT, string.Join(',', enumCandidates));
+            }
+            else
+            {
+                TypeClass = ClassName;
+                if (string.IsNullOrEmpty(TypeClass)) TypeClass = HintString;
+                if (string.IsNullOrEmpty(TypeClass)) TypeClass = nameof(Variant);
+            }
         }
 
         public bool IsGroupOrSubgroup => Usage.HasFlag(PropertyUsageFlags.Group) || Usage.HasFlag(PropertyUsageFlags.Subgroup);

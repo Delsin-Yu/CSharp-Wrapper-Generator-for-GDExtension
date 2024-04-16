@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Godot;
 
@@ -51,15 +53,65 @@ internal static partial class CodeGenerator
         }
         
         // Run all the generate logic in parallel.
+
+        var enumNameToConstantMap = new ConcurrentDictionary<string, string>();
         
         for (var index = 0; index < gdeTypeNames.Length; index++)
         {
             var gdeTypeInfo = classInheritanceMap[gdeTypeNames[index]];
-            generateTasks[index] = Task.Run(() => GenerateSourceCodeForType(gdeTypeInfo, classNameMap, classInheritanceMap, godotBuiltinTypeNames));
+            generateTasks[index] = Task.Run(
+                () => GenerateSourceCodeForType(
+                    gdeTypeInfo,
+                    classNameMap,
+                    classInheritanceMap,
+                    godotBuiltinTypeNames,
+                    enumNameToConstantMap
+                )
+            );
         }
-
+        
         var generated = Task.WhenAll(generateTasks).Result.ToList();
         generated.Add(GenerateStaticHelper());
+
+        // TODO: Add builtin enum maps.
+        
+        // StringName[] builtinEnums = ["Variant.Type", "Variant.Operator"];
+        //
+        // foreach (var variantClassName in builtinEnums)
+        // {
+        //     var variantEnumList = ClassDB.ClassGetEnumList(variantClassName);
+        //     foreach (var variantEnumName in variantEnumList)
+        //     {
+        //         var enumConstants = ClassDB.ClassGetEnumConstants(variantClassName, variantEnumName);
+        //         foreach (var enumConstant in enumConstants)
+        //         {
+        //             enumNameToConstantMap[enumConstant] = variantClassName;
+        //         }
+        //     }
+        // }
+        
+        var span = CollectionsMarshal.AsSpan(generated);
+
+        foreach (ref (string FileName, string Code) data in span)
+        {
+            data.Code = GetExtractUnResolvedEnumValueRegex().Replace(
+                data.Code,
+                match =>
+                {
+                    var unresolvedConstants = match.Groups["EnumConstants"].Value;
+                    if (string.IsNullOrEmpty(unresolvedConstants)) return "ENUM_UNRESOLVED";
+                    var split = unresolvedConstants.Split(',');
+                    foreach (var enumValue in split)
+                    {
+                        if (!enumNameToConstantMap.TryGetValue(enumValue, out var enumName)) continue;
+                        return enumName;
+                    }
+                    
+                    return "ENUM_UNRESOLVED"; 
+                }
+            );
+        }
+        
         return generated;
     }
 
