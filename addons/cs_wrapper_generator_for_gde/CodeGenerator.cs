@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -85,11 +86,14 @@ internal static partial class CodeGenerator
                 data.Code,
                 match =>
                 {
-                    var unresolvedConstants = match.Groups["EnumConstants"].Value;
+                    var unresolvedConstants = match.Groups["EnumConstants"].Value.Replace(" ", "");
                     if (string.IsNullOrEmpty(unresolvedConstants)) return "ENUM_UNRESOLVED";
-                    var split = unresolvedConstants.Split(',');
+                    var split = unresolvedConstants
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(x=>EscapeAndFormatName(x));
                     foreach (var enumValue in split)
                     {
+                        GD.Print($"enumValue: {enumValue}");
                         if (!enumNameToConstantMap.TryGetValue(enumValue, out var enumName)) continue;
                         return enumName;
                     }
