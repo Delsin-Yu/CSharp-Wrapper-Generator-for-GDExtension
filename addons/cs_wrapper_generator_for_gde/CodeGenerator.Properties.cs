@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Text;
+using Godot;
 
 namespace GDExtensionAPIGenerator;
 
@@ -65,11 +66,11 @@ internal static partial class CodeGenerator
                 
                 continue;
             }
-            
+            var enumString = propertyInfo.IsEnum && propertyInfo.Type == Variant.Type.Int ? ".As<Int64>()" : string.Empty;
             stringBuilder
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")
                 .AppendLine($"{TAB1}{{")
-                .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}");""")
+                .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}"){enumString};""")
                 .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
                 .AppendLine($"{TAB1}}}")
                 .AppendLine();

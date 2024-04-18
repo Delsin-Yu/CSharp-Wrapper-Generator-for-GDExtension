@@ -54,7 +54,7 @@ internal static partial class CodeGenerator
 
             foreach (var enumConstant in enumConstants)
             {
-                enumNameToConstantMap.TryAdd(enumConstant, enumFormatName);
+     
                 var enumIntValue = ClassDB.ClassGetIntegerConstant(gdeTypeInfo.TypeName, enumConstant);
 
                 var formatEnumConstant = EscapeAndFormatName(enumConstant);
@@ -62,7 +62,7 @@ internal static partial class CodeGenerator
                 if (index != -1) formatEnumConstant = formatEnumConstant.Remove(index, enumFormatName.Length);
 
                 formatEnumConstant = EscapeAndFormatName(formatEnumConstant);
-
+                enumNameToConstantMap.TryAdd(formatEnumConstant, enumFormatName);
                 codeBuilder.AppendLine($"{TAB2}{formatEnumConstant} = {enumIntValue},");
             }
 
