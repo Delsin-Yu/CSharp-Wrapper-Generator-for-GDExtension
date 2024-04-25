@@ -164,7 +164,8 @@ internal static partial class CodeGenerator
             Hint = hintInfo.As<PropertyHint>();
             HintString = hintStringInfo.AsString();
             Usage = usageInfo.As<PropertyUsageFlags>();
-            if (Hint is PropertyHint.Enum && Type is Variant.Type.Int)
+            //if (Hint is PropertyHint.Enum && Type is Variant.Type.Int)
+            if (false)
             {
                 var enumCandidates = HintString.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                 TypeClass = UNRESOLVED_ENUM_TEMPLATE.Replace(UNRESOLVED_ENUM_HINT, string.Join(',', enumCandidates));
@@ -318,7 +319,7 @@ internal static partial class CodeGenerator
             Variant.Type.PackedVector3Array => "Vector3[]",
             Variant.Type.PackedColorArray => "Color[]",
             Variant.Type.Bool => "bool",
-            Variant.Type.Int => hint is not PropertyHint.Enum ? "int" : (string.IsNullOrWhiteSpace(className) ? "UNDEFINED_ENUM" : className),
+            Variant.Type.Int => "int",//hint is not PropertyHint.Enum ? "int" : (string.IsNullOrWhiteSpace(className) ? "UNDEFINED_ENUM" : className),
             Variant.Type.Float => "float",
             Variant.Type.String => "string",
             Variant.Type.Object => className,
