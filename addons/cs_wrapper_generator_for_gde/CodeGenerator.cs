@@ -106,18 +106,26 @@ internal static partial class CodeGenerator
     }
 
 
-    private const string STATIC_HELPER_CLASS = "StaticMethod";
+    private const string STATIC_HELPER_CLASS = "GDExtensionHelper";
 
     private static (string, string) GenerateStaticHelper()
     {
         var sourceCode =
             $$"""
+            using System.Reflection;
             using Godot;
             
             public static class {{STATIC_HELPER_CLASS}}
             {
                 private static readonly System.Collections.Generic.Dictionary<string, GodotObject> _instances = [];
             
+                /// <summary>
+                /// Calls a static method within the given type.
+                /// </summary>
+                /// <param name="className">The type name.</param>
+                /// <param name="method">The method name.</param>
+                /// <param name="arguments">The arguments.</param>
+                /// <returns>The return value of the method.</returns>
                 public static Variant Call(string className, string method, params Variant[] arguments)
                 {
                     if (!_instances.TryGetValue(className, out var instance))
@@ -128,10 +136,35 @@ internal static partial class CodeGenerator
             
                     return instance.Call(method, arguments);
                 }
+                
+                /// <summary>
+                /// Try to cast the script on the supplied <paramref name="godotObject"/> to the <typeparamref name="T"/> wrapper type,
+                /// if no script has attached to the type, or the script attached to the type does not inherit the <typeparamref name="T"/> wrapper type,
+                /// a new instance of the <typeparamref name="T"/> wrapper script will get attaches to the <paramref name="godotObject"/>.
+                /// </summary>
+                /// <remarks>The developer should only supply the <paramref name="godotObject"/> that represents the correct underlying GDExtension type.</remarks>
+                /// <param name="godotObject">The <paramref name="godotObject"/> that represents the correct underlying GDExtension type.</param>
+                /// <returns>The existing or a new instance of the <typeparamref name="T"/> wrapper script attached to the supplied <paramref name="godotObject"/>.</returns>
+                public static T {{VariantToInstanceMethodName}}<T>(GodotObject godotObject) where T : GodotObject
+                {
+                    if (godotObject is T wrapperScript) return wrapperScript;
+                    var instanceId = godotObject.GetInstanceId();
+                    godotObject.SetScript(ResourceLoader.Load(typeof(T).GetCustomAttribute<ScriptPathAttribute>()!.Path));
+                    return (T)GodotObject.InstanceFromId(instanceId);
+                }
+                
+                /// <summary>
+                /// Creates an instance of the GDExtension <typeparam name="T"/> type, and attaches the wrapper script to it.
+                /// </summary>
+                /// <returns>The wrapper instance linked to the underlying GDExtension type.</returns>
+                public static T {{CreateInstanceMethodName}}<T>(string className) where T : GodotObject
+                {
+                    return Bind<T>(ClassDB.Instantiate(className).As<GodotObject>());
+                }
             }
             """;
 
-        return (STATIC_HELPER_CLASS, sourceCode);
+        return ($"_{STATIC_HELPER_CLASS}", sourceCode);
     }
     
     private static Dictionary<string, string> GetGodotSharpTypeNameMap()

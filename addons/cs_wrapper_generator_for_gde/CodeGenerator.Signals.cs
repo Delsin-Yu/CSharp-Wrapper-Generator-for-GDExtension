@@ -94,9 +94,9 @@ internal static partial class CodeGenerator
             );
 
             const string argPrefix = "arg";
-            const string unmanagedPostfix = "_unmanaged";
+            const string variantPostfix = "_variant";
 
-            static string UnmanagedArg(int index) => $"{argPrefix}{index}{unmanagedPostfix}";
+            static string UnmanagedArg(int index) => $"{argPrefix}{index}{variantPostfix}";
 
             static string Arg(int index) => $"{argPrefix}{index}";
 
@@ -125,7 +125,7 @@ internal static partial class CodeGenerator
                 var argumentType = argumentInfo.GetTypeName();
                 argumentType = godotSharpTypeNameMap.GetValueOrDefault(argumentType, argumentType);
                 if (gdeTypeMap.ContainsKey(argumentType))
-                    codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {argumentType}.{VariantToInstanceMethodName}({variantArgName}.As<GodotObject>());");
+                    codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{argumentType}>({variantArgName}.As<GodotObject>());");
                 else
                     codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {variantArgName}.As<{argumentType}>();");
             }

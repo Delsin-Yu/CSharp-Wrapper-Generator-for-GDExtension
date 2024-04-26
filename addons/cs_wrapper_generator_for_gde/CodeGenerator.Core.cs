@@ -36,7 +36,9 @@ internal static partial class CodeGenerator
     private const string TAB6 = TAB3 + TAB3;
     private const string NAMESPACE = "GDExtension.Wrappers";
     private const string VariantToInstanceMethodName = "Bind";
+    private const string CreateInstanceMethodName = "Instantiate";
     private const string VariantToGodotObject = "As<GodotObject>()";
+    private const string GDExtensionName = "GDExtensionName";
 
     private static string GenerateCode(
         ClassInfo gdeTypeInfo,
@@ -69,20 +71,10 @@ internal static partial class CodeGenerator
 
               public {{abstractKeyWord}}partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
+              {{TAB1}}public {{newKeyWord}}const string {{GDExtensionName}} = "{{gdeTypeInfo.TypeName}}";
 
               {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the Construct() method instead.")]
               {{TAB1}}protected {{displayTypeName}}() { }
-
-              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(GodotObject godotObject)
-              {{TAB1}}{
-              {{TAB2}}var instanceId = godotObject.GetInstanceId();
-              {{TAB2}}godotObject.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
-              {{TAB2}}return ({{displayTypeName}})InstanceFromId(instanceId);
-              {{TAB1}}}
-
-              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Instantiate() =>
-              {{TAB2}}{{VariantToInstanceMethodName}}(ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").{{VariantToGodotObject}});
-
               """
         );
 
@@ -271,7 +263,6 @@ internal static partial class CodeGenerator
                 typeName = godotsharpTypeNameMap.GetValueOrDefault(typeName, typeName);
             }
             stringBuilder
-                .Append("in ")
                 .Append(typeName)
                 .Append(' ')
                 .Append(propertyInfo.GetArgumentName());
