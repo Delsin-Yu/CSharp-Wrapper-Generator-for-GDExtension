@@ -36,6 +36,7 @@ internal static partial class CodeGenerator
     private const string TAB6 = TAB3 + TAB3;
     private const string NAMESPACE = "GDExtension.Wrappers";
     private const string VariantToInstanceMethodName = "Bind";
+    private const string VariantToGodotObject = "As<GodotObject>()";
 
     private static string GenerateCode(
         ClassInfo gdeTypeInfo,
@@ -72,16 +73,15 @@ internal static partial class CodeGenerator
               {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the Construct() method instead.")]
               {{TAB1}}protected {{displayTypeName}}() { }
 
-              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(Variant variant, {{METHOD_BLOCKER}})
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(GodotObject godotObject)
               {{TAB1}}{
-              {{TAB2}}var godotObject = variant.As<GodotObject>();
               {{TAB2}}var instanceId = godotObject.GetInstanceId();
               {{TAB2}}godotObject.SetScript(ResourceLoader.Load("{{GeneratorMain.GetWrapperPath(displayTypeName)}}"));
               {{TAB2}}return ({{displayTypeName}})InstanceFromId(instanceId);
               {{TAB1}}}
 
-              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Instantiate({{METHOD_BLOCKER}}) =>
-              {{TAB2}}{{VariantToInstanceMethodName}}(ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}"));
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} Instantiate() =>
+              {{TAB2}}{{VariantToInstanceMethodName}}(ClassDB.Instantiate("{{gdeTypeInfo.TypeName}}").{{VariantToGodotObject}});
 
               """
         );
@@ -164,8 +164,7 @@ internal static partial class CodeGenerator
             Hint = hintInfo.As<PropertyHint>();
             HintString = hintStringInfo.AsString();
             Usage = usageInfo.As<PropertyUsageFlags>();
-            //if (Hint is PropertyHint.Enum && Type is Variant.Type.Int)
-            if (false)
+            if (Hint is PropertyHint.Enum && Type is Variant.Type.Int)
             {
                 var enumCandidates = HintString.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                 TypeClass = UNRESOLVED_ENUM_TEMPLATE.Replace(UNRESOLVED_ENUM_HINT, string.Join(',', enumCandidates));
@@ -319,7 +318,7 @@ internal static partial class CodeGenerator
             Variant.Type.PackedVector3Array => "Vector3[]",
             Variant.Type.PackedColorArray => "Color[]",
             Variant.Type.Bool => "bool",
-            Variant.Type.Int => "int",//hint is not PropertyHint.Enum ? "int" : (string.IsNullOrWhiteSpace(className) ? "UNDEFINED_ENUM" : className),
+            Variant.Type.Int => hint is not PropertyHint.Enum ? "int" : (string.IsNullOrWhiteSpace(className) ? "UNDEFINED_ENUM" : className),
             Variant.Type.Float => "float",
             Variant.Type.String => "string",
             Variant.Type.Object => className,

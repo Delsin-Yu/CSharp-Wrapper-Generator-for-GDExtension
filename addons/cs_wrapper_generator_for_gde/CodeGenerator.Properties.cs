@@ -45,12 +45,12 @@ internal static partial class CodeGenerator
                 occupiedNames.Add(propertyName);
             }
 
-            stringBuilder.AppendLine($"""
-                                      /*
-                                      {propertyInfo}
-                                      */
-                                      """
-                                      );
+//             stringBuilder.AppendLine($"""
+//                                       /*
+//                                       {propertyInfo}
+//                                       */
+//                                       """
+//                                       );
 
             if (propertyInfo.IsVoid)
             {

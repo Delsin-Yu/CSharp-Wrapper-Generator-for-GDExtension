@@ -45,11 +45,11 @@ internal static partial class CodeGenerator
                 occupiedNames.Add(methodName);
             }
 
-            stringBuilder.AppendLine($"""
-                                      /*
-                                      {methodInfo}
-                                      */
-                                      """);
+//             stringBuilder.AppendLine($"""
+//                                       /*
+//                                       {methodInfo}
+//                                       */
+//                                       """);
             
             stringBuilder
                 .Append($"{TAB1}public ");
@@ -74,7 +74,7 @@ internal static partial class CodeGenerator
             
             stringBuilder.Append(" => ");
 
-            if (!methodInfo.ReturnValue.IsVoid && 
+            if (!methodInfo.ReturnValue.IsVoid &&
                 gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
             {
                 stringBuilder.Append($"{returnTypeInfo.TypeName}.{VariantToInstanceMethodName}(");
@@ -119,7 +119,7 @@ internal static partial class CodeGenerator
             {
                 if (gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
                 {
-                    stringBuilder.Append(')');
+                    stringBuilder.Append($".{VariantToGodotObject})");
                 }
                 else
                 {

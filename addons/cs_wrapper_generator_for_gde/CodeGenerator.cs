@@ -76,8 +76,6 @@ internal static partial class CodeGenerator
 
         PopulateBuiltinEnumTypes(enumNameToConstantMap);
 
-        GD.Print(string.Join('\n', enumNameToConstantMap.Select(x => $"{x.Key}, {x.Value}")));
-        
         var span = CollectionsMarshal.AsSpan(generated);
 
         foreach (ref (string FileName, string Code) data in span)
@@ -91,10 +89,11 @@ internal static partial class CodeGenerator
                     var split = unresolvedConstants
                         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                         .Select(x=>EscapeAndFormatName(x));
+                    
                     foreach (var enumValue in split)
                     {
-                        GD.Print($"enumValue: {enumValue}");
                         if (!enumNameToConstantMap.TryGetValue(enumValue, out var enumName)) continue;
+                        if (enumName == null) return $"long /*{unresolvedConstants}*/";
                         return enumName;
                     }
                     
@@ -108,7 +107,6 @@ internal static partial class CodeGenerator
 
 
     private const string STATIC_HELPER_CLASS = "StaticMethod";
-    private const string METHOD_BLOCKER = "in int? _ = null";
 
     private static (string, string) GenerateStaticHelper()
     {

@@ -125,7 +125,7 @@ internal static partial class CodeGenerator
                 var argumentType = argumentInfo.GetTypeName();
                 argumentType = godotSharpTypeNameMap.GetValueOrDefault(argumentType, argumentType);
                 if (gdeTypeMap.ContainsKey(argumentType))
-                    codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {argumentType}.{VariantToInstanceMethodName}({variantArgName});");
+                    codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {argumentType}.{VariantToInstanceMethodName}({variantArgName}.As<GodotObject>());");
                 else
                     codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {variantArgName}.As<{argumentType}>();");
             }

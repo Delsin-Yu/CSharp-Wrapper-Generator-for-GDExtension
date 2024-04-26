@@ -44,7 +44,7 @@ internal static partial class CodeGenerator
 
             codeBuilder.Append(
                 $$"""
-                  {{TAB1}}public enum {{enumFormatName}}
+                  {{TAB1}}public enum {{enumFormatName}} : long
                   {{TAB1}}{
 
                   """
