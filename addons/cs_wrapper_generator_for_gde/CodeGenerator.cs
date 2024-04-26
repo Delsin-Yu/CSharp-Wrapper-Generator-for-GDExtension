@@ -157,7 +157,7 @@ internal static partial class CodeGenerator
                 /// Creates an instance of the GDExtension <typeparam name="T"/> type, and attaches the wrapper script to it.
                 /// </summary>
                 /// <returns>The wrapper instance linked to the underlying GDExtension type.</returns>
-                public static T {{CreateInstanceMethodName}}<T>(string className) where T : GodotObject
+                public static T {{CreateInstanceMethodName}}<T>(StringName className) where T : GodotObject
                 {
                     return Bind<T>(ClassDB.Instantiate(className).As<GodotObject>());
                 }

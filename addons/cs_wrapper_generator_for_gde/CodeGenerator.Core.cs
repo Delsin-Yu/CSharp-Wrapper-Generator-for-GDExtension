@@ -71,10 +71,32 @@ internal static partial class CodeGenerator
 
               public {{abstractKeyWord}}partial class {{displayTypeName}} : {{displayParentTypeName}}
               {
-              {{TAB1}}public {{newKeyWord}}const string {{GDExtensionName}} = "{{gdeTypeInfo.TypeName}}";
+              {{TAB1}}public {{newKeyWord}}static readonly StringName {{GDExtensionName}} = "{{gdeTypeInfo.TypeName}}";
 
-              {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the Construct() method instead.")]
+              {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the {{CreateInstanceMethodName}}() method instead.")]
               {{TAB1}}protected {{displayTypeName}}() { }
+              
+              {{TAB1}}/// <summary>
+              {{TAB1}}/// Creates an instance of the GDExtension <see cref="{{displayTypeName}}"/> type, and attaches the wrapper script to it.
+              {{TAB1}}/// </summary>
+              {{TAB1}}/// <returns>The wrapper instance linked to the underlying GDExtension type.</returns>
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{CreateInstanceMethodName}}()
+              {{TAB1}}{
+              {{TAB2}}return {{STATIC_HELPER_CLASS}}.{{CreateInstanceMethodName}}<{{displayTypeName}}>({{GDExtensionName}});
+              {{TAB1}}}
+              
+              {{TAB1}}/// <summary>
+              {{TAB1}}/// Try to cast the script on the supplied <paramref name="godotObject"/> to the <see cref="{{displayTypeName}}"/> wrapper type,
+              {{TAB1}}/// if no script has attached to the type, or the script attached to the type does not inherit the <see cref="{{displayTypeName}}"/> wrapper type,
+              {{TAB1}}/// a new instance of the <see cref="{{displayTypeName}}"/> wrapper script will get attaches to the <paramref name="godotObject"/>.
+              {{TAB1}}/// </summary>
+              {{TAB1}}/// <remarks>The developer should only supply the <paramref name="godotObject"/> that represents the correct underlying GDExtension type.</remarks>
+              {{TAB1}}/// <param name="godotObject">The <paramref name="godotObject"/> that represents the correct underlying GDExtension type.</param>
+              {{TAB1}}/// <returns>The existing or a new instance of the <see cref="{{displayTypeName}}"/> wrapper script attached to the supplied <paramref name="godotObject"/>.</returns>
+              {{TAB1}}public {{newKeyWord}}static {{displayTypeName}} {{VariantToInstanceMethodName}}(GodotObject godotObject)
+              {{TAB1}}{
+              {{TAB2}}return {{STATIC_HELPER_CLASS}}.{{VariantToInstanceMethodName}}<{{displayTypeName}}>(godotObject);
+              {{TAB1}}}
               """
         );
 
