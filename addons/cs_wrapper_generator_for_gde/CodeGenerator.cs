@@ -112,6 +112,7 @@ internal static partial class CodeGenerator
     {
         var sourceCode =
             $$"""
+            using System.Linq;
             using System.Reflection;
             using Godot;
             
@@ -149,7 +150,7 @@ internal static partial class CodeGenerator
                 {
                     if (godotObject is T wrapperScript) return wrapperScript;
                     var instanceId = godotObject.GetInstanceId();
-                    godotObject.SetScript(ResourceLoader.Load(typeof(T).GetCustomAttribute<ScriptPathAttribute>()!.Path));
+                    godotObject.SetScript(ResourceLoader.Load(typeof(T).GetCustomAttributes<ScriptPathAttribute>().First().Path));
                     return (T)GodotObject.InstanceFromId(instanceId);
                 }
                 
