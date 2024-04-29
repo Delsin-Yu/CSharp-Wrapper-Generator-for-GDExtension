@@ -1,0 +1,90 @@
+[gd_scene load_steps=4 format=3 uid="uid://cu2jsegm1nbtf"]
+
+[ext_resource type="Script" path="res://vision/VisionTask.gd" id="1_xmyhf"]
+
+[sub_resource type="ImageTexture" id="ImageTexture_wteds"]
+
+[sub_resource type="Theme" id="Theme_pmbf8"]
+default_font_size = 48
+
+[node name="VisionTask" type="MarginContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 32
+script = ExtResource("1_xmyhf")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 32
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "Vision Task"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Back" type="Button" parent="VBoxContainer/Title"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.5
+anchor_right = 0.2
+anchor_bottom = 0.5
+grow_vertical = 2
+theme_override_font_sizes/font_size = 48
+text = "Back"
+
+[node name="Image" type="TextureRect" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+texture = SubResource("ImageTexture_wteds")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Buttons" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme = SubResource("Theme_pmbf8")
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="LoadImage" type="Button" parent="VBoxContainer/Buttons"]
+layout_mode = 2
+text = "Load Image"
+
+[node name="LoadVideo" type="Button" parent="VBoxContainer/Buttons"]
+layout_mode = 2
+text = "Load Video"
+
+[node name="OpenCamera" type="Button" parent="VBoxContainer/Buttons"]
+layout_mode = 2
+text = "Open Camera"
+
+[node name="Video" type="VideoStreamPlayer" parent="."]
+visible = false
+layout_mode = 2
+
+[node name="ImageFileDialog" type="FileDialog" parent="."]
+title = "Open a File"
+ok_button_text = "Open"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.bmp", "*.jpg", "*.png")
+
+[node name="VideoFileDialog" type="FileDialog" parent="."]
+title = "Open a File"
+ok_button_text = "Open"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.ogv")
+
+[node name="PermissionDialog" type="AcceptDialog" parent="."]
+title = "Permission Denied"
+size = Vector2i(283, 109)
+dialog_text = "Camera permission is not granted.
+Please start the camera again."
