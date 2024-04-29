@@ -1,10 +1,10 @@
 [gd_scene load_steps=3 format=3 uid="uid://bxi5yxmfo467s"]
 
-[ext_resource type="PackedScene" uid="uid://cu2jsegm1nbtf" path="res://vision/VisionTask.tscn" id="1_48pr5"]
-[ext_resource type="Script" path="res://vision/face_landmarker/FaceLandmarker.cs" id="2_gjpin"]
+[ext_resource type="PackedScene" uid="uid://cu2jsegm1nbtf" path="res://test/GDMP/VisionTask.tscn" id="1_48pr5"]
+[ext_resource type="Script" path="res://test/GDMP/face_landmarker/FaceLandmarker.cs" id="2_hf1ip"]
 
 [node name="VisionTask" instance=ExtResource("1_48pr5")]
-script = ExtResource("2_gjpin")
+script = ExtResource("2_hf1ip")
 
 [node name="Title" parent="VBoxContainer" index="0"]
 text = "Face Landmarker"

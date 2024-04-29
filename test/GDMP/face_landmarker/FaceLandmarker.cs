@@ -8,7 +8,7 @@ using Array = Godot.Collections.Array;
 public partial class FaceLandmarker : VisionTask
 {
     public MediaPipeFaceLandmarker Task;
-    public string                  TaskFile = "res://vision/face_landmarker/face_landmarker_v2_with_blendshapes.task";
+    public string                  TaskFile = "res://test/GDMP/face_landmarker/face_landmarker_v2_with_blendshapes.task";
     public Label                   LabelBlendShapes;
     // Called when the node enters the scene tree for the first time.
     public override void _Ready()

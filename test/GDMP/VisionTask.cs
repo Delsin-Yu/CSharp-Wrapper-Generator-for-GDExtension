@@ -85,9 +85,9 @@ public partial class VisionTask : Control
     public virtual void _LoadImage(string path)
     {
        Reset();
-       if (RunningMode != MediaPipeTask.VisionRunningMode.RunnineModeVideo)
+       if (RunningMode != MediaPipeTask.VisionRunningMode.RunningModeImage)
        {
-           RunningMode = MediaPipeTask.VisionRunningMode.RunnineModeVideo;
+           RunningMode = MediaPipeTask.VisionRunningMode.RunningModeImage;
            InitTask();
        }
        var image = Image.LoadFromFile(path);
