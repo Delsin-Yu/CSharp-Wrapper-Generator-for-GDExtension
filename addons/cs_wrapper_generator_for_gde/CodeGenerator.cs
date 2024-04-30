@@ -167,6 +167,10 @@ internal static partial class CodeGenerator
                     return scriptPath is null ? null : ResourceLoader.Load(scriptPath.Path);
                 }
             
+                public static Godot.Collections.Array<T> Cast<[MustBeVariant]T>(Godot.Collections.Array<GodotObject> godotObjects) where T : GodotObject
+                {
+                    return new Godot.Collections.Array<T>(godotObjects.Select(Bind<T>));
+                }
                 
                 /// <summary>
                 /// Creates an instance of the GDExtension <typeparam name="T"/> type, and attaches the wrapper script to it.

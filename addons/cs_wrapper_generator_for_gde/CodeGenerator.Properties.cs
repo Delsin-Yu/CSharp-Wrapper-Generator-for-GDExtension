@@ -67,10 +67,17 @@ internal static partial class CodeGenerator
                 continue;
             }
             var enumString = propertyInfo.IsEnum && propertyInfo.Type == Variant.Type.Int ? ".As<Int64>()" : string.Empty;
+            var castTypeName =  typeName;
+            var getter = $"({castTypeName}){backing}Get(\"{propertyInfo.NativeName}\"){enumString}";
+            if (propertyInfo.IsArray && typeName.Contains("Godot.GodotObject"))
+            {
+                typeName = typeName.Replace("Godot.GodotObject", godotSharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass));
+                getter = $"GDExtensionHelper.Cast<{propertyInfo.TypeClass}>({getter})";
+            }
             stringBuilder
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")
                 .AppendLine($"{TAB1}{{")
-                .AppendLine($"""{TAB2}get => ({typeName}){backing}Get("{propertyInfo.NativeName}"){enumString};""")
+                .AppendLine($"""{TAB2}get => {getter};""")
                 .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
                 .AppendLine($"{TAB1}}}")
                 .AppendLine();

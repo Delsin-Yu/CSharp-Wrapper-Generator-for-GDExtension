@@ -186,7 +186,7 @@ internal static partial class CodeGenerator
             else
             {
                 TypeClass = ClassName;
-                if (string.IsNullOrEmpty(TypeClass)) TypeClass = HintString;
+                if (string.IsNullOrEmpty(TypeClass)) TypeClass = IsArray && HintString.Contains(':') ? HintString[(HintString.IndexOf(':') + 1)..] : HintString;
                 if (string.IsNullOrEmpty(TypeClass)) TypeClass = nameof(Variant);
             }
         }
@@ -194,6 +194,7 @@ internal static partial class CodeGenerator
         public bool IsGroupOrSubgroup => Usage.HasFlag(PropertyUsageFlags.Group) || Usage.HasFlag(PropertyUsageFlags.Subgroup);
         public bool IsVoid => Type is Variant.Type.Nil;
         public bool IsEnum => Hint is PropertyHint.Enum;
+        public bool IsArray => Hint is PropertyHint.ArrayType && Type == Variant.Type.Array;
         
         public string GetTypeName() => VariantToTypeName(Type, Hint, TypeClass);
 
@@ -336,7 +337,7 @@ internal static partial class CodeGenerator
             Variant.Type.String => "string",
             Variant.Type.Object => className,
             Variant.Type.Dictionary => "Godot.Collections.Dictionary",
-            Variant.Type.Array => "Godot.Collections.Array",
+            Variant.Type.Array => hint == PropertyHint.ArrayType  ? $"Godot.Collections.Array<Godot.GodotObject>" :"Godot.Collections.Array",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 
