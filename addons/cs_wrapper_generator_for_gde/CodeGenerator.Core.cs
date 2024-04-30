@@ -287,7 +287,7 @@ internal static partial class CodeGenerator
                 typeName = godotsharpTypeNameMap.GetValueOrDefault(typeName, typeName);
                 if (propertyInfo.IsArray)
                 {
-                    typeName = typeName.Replace("Godot.GodotObject", propertyInfo.TypeClass);
+                    typeName = typeName.Replace("Godot.GodotObject", godotsharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass));
                 }
             }
             stringBuilder

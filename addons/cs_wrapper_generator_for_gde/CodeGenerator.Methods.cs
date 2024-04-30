@@ -85,7 +85,7 @@ internal static partial class CodeGenerator
             }
             
             if (!methodInfo.ReturnValue.IsVoid &&
-                gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName,  out var returnTypeInfo))
+                gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
             {
                 stringBuilder.Append($"{STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{returnTypeInfo.TypeName}>(");
             }
