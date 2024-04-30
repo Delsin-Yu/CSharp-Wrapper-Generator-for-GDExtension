@@ -69,10 +69,10 @@ internal static partial class CodeGenerator
             var enumString = propertyInfo.IsEnum && propertyInfo.Type == Variant.Type.Int ? ".As<Int64>()" : string.Empty;
             var castTypeName =  typeName;
             var getter = $"({castTypeName}){backing}Get(\"{propertyInfo.NativeName}\"){enumString}";
-            if (propertyInfo.IsArray && typeName.Contains("Godot.GodotObject"))
+            if (propertyInfo.IsArray)
             {
                 typeName = typeName.Replace("Godot.GodotObject", godotSharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass));
-                getter = $"GDExtensionHelper.Cast<{propertyInfo.TypeClass}>({getter})";
+                getter = $"{STATIC_HELPER_CLASS}.{CastMethodName}<{propertyInfo.TypeClass}>({getter})";
             }
             stringBuilder
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")
