@@ -36,6 +36,7 @@ internal static partial class CodeGenerator
     private const string TAB6 = TAB3 + TAB3;
     private const string NAMESPACE = "GDExtension.Wrappers";
     private const string VariantToInstanceMethodName = "Bind";
+    private const string CastMethodName = "Cast";
     private const string CreateInstanceMethodName = "Instantiate";
     private const string VariantToGodotObject = "As<GodotObject>()";
     private const string GDExtensionName = "GDExtensionName";
@@ -284,6 +285,10 @@ internal static partial class CodeGenerator
             else
             {
                 typeName = godotsharpTypeNameMap.GetValueOrDefault(typeName, typeName);
+                if (propertyInfo.IsArray)
+                {
+                    typeName = typeName.Replace("Godot.GodotObject", propertyInfo.TypeClass);
+                }
             }
             stringBuilder
                 .Append(typeName)

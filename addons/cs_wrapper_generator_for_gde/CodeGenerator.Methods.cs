@@ -45,11 +45,11 @@ internal static partial class CodeGenerator
                 occupiedNames.Add(methodName);
             }
 
-//             stringBuilder.AppendLine($"""
-//                                       /*
-//                                       {methodInfo}
-//                                       */
-//                                       """);
+//              stringBuilder.AppendLine($"""
+//                                        /*
+//                                        {methodInfo}
+//                                        */
+//                                        """);
             
             stringBuilder
                 .Append($"{TAB1}public ");
@@ -59,6 +59,11 @@ internal static partial class CodeGenerator
             
             if (isStatic) stringBuilder.Append("static ");
             if (isVirtual) stringBuilder.Append("virtual ");
+            
+            if (methodInfo.ReturnValue.IsArray)
+            {
+                returnValueName = returnValueName.Replace("Godot.GodotObject", godotSharpTypeNameMap.GetValueOrDefault(methodInfo.ReturnValue.TypeClass, methodInfo.ReturnValue.TypeClass));
+            }
             
             stringBuilder
                 .Append(returnValueName)
@@ -73,9 +78,14 @@ internal static partial class CodeGenerator
             // TODO: VIRTUAL
             
             stringBuilder.Append(" => ");
-
+            
+            if (methodInfo.ReturnValue.IsArray)
+            {
+                stringBuilder.Append($"{STATIC_HELPER_CLASS}.{CastMethodName}<{methodInfo.ReturnValue.TypeClass}>(");
+            }
+            
             if (!methodInfo.ReturnValue.IsVoid &&
-                gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
+                gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName,  out var returnTypeInfo))
             {
                 stringBuilder.Append($"{STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{returnTypeInfo.TypeName}>(");
             }
@@ -126,7 +136,12 @@ internal static partial class CodeGenerator
                     stringBuilder.Append($".As<{methodInfo.ReturnValue.GetTypeName()}>()");
                 }
             }
-
+            
+            if (methodInfo.ReturnValue.IsArray)
+            {
+                stringBuilder.Append(')');
+            }
+            
             stringBuilder.AppendLine(";").AppendLine();
         }
 
