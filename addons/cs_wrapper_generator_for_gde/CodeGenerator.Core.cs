@@ -253,13 +253,13 @@ internal static partial class CodeGenerator
                                               {TAB1}{nameof(Flags)}: {Flags}, 
                                               {TAB1}{nameof(Id)}: {Id}, 
                                               {TAB1}{nameof(Arguments)}: 
-                                              {TAB2}[
-                                              {string.Join(',', Arguments.Select(x => TAB3 + x.ToString().ReplaceLineEndings($"\n{TAB3}")))}
-                                              {TAB2}], 
+                                              {TAB1}[
+                                              {string.Join(",\n", Arguments.Select(x => TAB2 + x.ToString().ReplaceLineEndings($"\n{TAB2}")))}
+                                              {TAB1}], 
                                               {TAB1}{nameof(DefaultArguments)}: 
-                                              {TAB2}[
-                                              {string.Join(',', DefaultArguments.Select(x => TAB3 + x.ToString().ReplaceLineEndings($"\n{TAB3}")))}
-                                              {TAB2}]
+                                              {TAB1}[
+                                              {string.Join(",\n", DefaultArguments.Select(x => TAB2 + x.ToString().ReplaceLineEndings($"\n{TAB2}")))}
+                                              {TAB1}]
                                               """;
     }
 
