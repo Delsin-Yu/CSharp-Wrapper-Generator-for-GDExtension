@@ -172,6 +172,66 @@ internal static partial class CodeGenerator
                     return new Godot.Collections.Array<T>(godotObjects.Select(Bind<T>));
                 }
                 
+                private readonly struct MethodInfo
+                {
+                    public string NativeName { get; }
+                    public Variant[] DefaultArguments { get; }
+                    public int ArgumentCount { get; }
+                    public int DefaultArgumentIndex  { get; }
+                    public MethodInfo(Godot.Collections.Dictionary dictionary)
+                    {
+                        using var nameInfo = dictionary["name"];
+                        using var argsInfo = dictionary["args"];
+                        using var defaultArgsInfo = dictionary["default_args"];
+                        DefaultArguments = defaultArgsInfo.As<Godot.Collections.Array<Variant>>().ToArray();
+                        NativeName = nameInfo.AsString();
+                        ArgumentCount = argsInfo.As<Godot.Collections.Array>().Count;
+                        DefaultArgumentIndex = ArgumentCount - DefaultArguments.Length - 1;
+                    }
+                }
+                
+                private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string,MethodInfo>> _classMethodInfo = [];
+                
+                public static Variant[] GetArguments(string className, string method, params object[] arguments)
+                {
+                    var methodsInfo = _classMethodInfo.GetOrAdd(className, GetMethodsFactory);
+                    if (methodsInfo.TryGetValue(method, out var methodInfo) && arguments.Length <= methodInfo.ArgumentCount)
+                    {
+                        var array = new Variant[methodInfo.ArgumentCount];
+                        var defaultArgs = methodInfo.DefaultArguments;
+                        var defaultIndex = methodInfo.DefaultArgumentIndex;
+                        for (var i = 0; i < arguments.Length; i++)
+                        {
+                            if( i >= defaultIndex && arguments[i] is null)
+                            {
+                                array[i] = defaultArgs[i];
+                                continue;
+                            }
+                            array[i] = (Variant)arguments[i];
+                        }
+                    
+                        return array;
+                    }
+                    return arguments.Select(x => (Variant)x).ToArray();
+                }
+                
+                private static ConcurrentDictionary<string, MethodInfo> GetMethodsFactory(string classname)
+                {
+            #if DEBUG
+                    if (!ClassDB.ClassExists(classname))
+                    {
+                        return null;
+                    }
+            #endif
+                    return  new  ConcurrentDictionary<string, MethodInfo>(ClassDB
+                       .ClassGetMethodList(classname, true).Select(dictionary =>
+                       {
+                           var methodInfo = new MethodInfo(dictionary);
+                           dictionary.Dispose();
+                           return new System.Collections.Generic.KeyValuePair<string, MethodInfo>(methodInfo.NativeName,methodInfo);
+                       }));
+                }
+                
                 /// <summary>
                 /// Creates an instance of the GDExtension <typeparam name="T"/> type, and attaches the wrapper script to it.
                 /// </summary>
