@@ -10,6 +10,7 @@ internal static partial class CodeGenerator
         ICollection<string> occupiedNames,
         IReadOnlyList<PropertyInfo> propertyInfos,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
+        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
         StringBuilder stringBuilder,
         string backing
     )
@@ -71,8 +72,9 @@ internal static partial class CodeGenerator
             var getter = $"({castTypeName}){backing}Get(\"{propertyInfo.NativeName}\"){enumString}";
             if (propertyInfo.IsArray)
             {
-                typeName = typeName.Replace("Godot.GodotObject", godotSharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass));
-                getter = $"{STATIC_HELPER_CLASS}.{CastMethodName}<{propertyInfo.TypeClass}>({getter})";
+                var typeClass = godotSharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass);
+                typeName = typeName.Replace("Godot.GodotObject", typeClass);
+                getter = gdeTypeMap.ContainsKey(typeClass) ? $"{STATIC_HELPER_CLASS}.{CastMethodName}<{typeClass}>({getter})" : getter.Replace("Godot.GodotObject", typeClass);
             }
             stringBuilder
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")

@@ -124,10 +124,22 @@ internal static partial class CodeGenerator
                 var convertedArgName = Arg(index);
                 var argumentType = argumentInfo.GetTypeName();
                 argumentType = godotSharpTypeNameMap.GetValueOrDefault(argumentType, argumentType);
+                codeBuilder.Append($"{TAB6}var {convertedArgName} = ");
                 if (gdeTypeMap.ContainsKey(argumentType))
-                    codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{argumentType}>({variantArgName}.As<GodotObject>());");
+                    codeBuilder.AppendLine($"{STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{argumentType}>({variantArgName}.As<GodotObject>());");
                 else
-                    codeBuilder.AppendLine($"{TAB6}var {convertedArgName} = {variantArgName}.As<{argumentType}>();");
+                {
+                    if (argumentInfo.IsArray)
+                    {
+                        var typeClass = godotSharpTypeNameMap.GetValueOrDefault(argumentInfo.TypeClass, argumentInfo.TypeClass);
+                        if (gdeTypeMap.ContainsKey(typeClass))
+                            codeBuilder.AppendLine($"{STATIC_HELPER_CLASS}.{CastMethodName}<{typeClass}>({variantArgName}.As<Godot.Collections.Array<Godot.GodotObject>>());");
+                        else
+                            codeBuilder.AppendLine($"{variantArgName}.As<Godot.Collections.Array<{typeClass}>>());");
+                    }
+                    else
+                      codeBuilder.AppendLine($"{variantArgName}.As<{argumentType}>();");
+                }
             }
 
             codeBuilder.Append($"{TAB6}{backingDelegateName}?.Invoke(");

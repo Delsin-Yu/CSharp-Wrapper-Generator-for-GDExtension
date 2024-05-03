@@ -135,7 +135,7 @@ internal static partial class CodeGenerator
         var propertiesBuilder = new StringBuilder();
         var methodsBuilder = new StringBuilder();
         
-        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, propertiesBuilder, backingName);
+        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, gdeTypeMap, propertiesBuilder, backingName);
         ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, methodsBuilder, gdeTypeInfo, backingName);
         ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
         ConstructEnums(occupiedNames, enumInfoList, enumsBuilder, gdeTypeInfo, enumConstantMap);
@@ -342,7 +342,7 @@ internal static partial class CodeGenerator
             Variant.Type.String => "string",
             Variant.Type.Object => className,
             Variant.Type.Dictionary => "Godot.Collections.Dictionary",
-            Variant.Type.Array => hint == PropertyHint.ArrayType  ? $"Godot.Collections.Array<Godot.GodotObject>" :"Godot.Collections.Array",
+            Variant.Type.Array => hint is PropertyHint.ArrayType? $"Godot.Collections.Array<Godot.GodotObject>" :"Godot.Collections.Array",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 
