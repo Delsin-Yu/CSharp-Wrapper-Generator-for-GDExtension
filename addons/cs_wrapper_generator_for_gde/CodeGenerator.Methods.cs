@@ -79,7 +79,7 @@ internal static partial class CodeGenerator
             
             stringBuilder.Append(" => ");
             
-            if (methodInfo.ReturnValue.IsArray)
+            if (methodInfo.ReturnValue.IsArray && gdeTypeMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
             {
                 stringBuilder.Append($"{STATIC_HELPER_CLASS}.{CastMethodName}<{methodInfo.ReturnValue.TypeClass}>(");
             }
