@@ -342,7 +342,7 @@ internal static partial class CodeGenerator
             Variant.Type.String => "string",
             Variant.Type.Object => className,
             Variant.Type.Dictionary => "Godot.Collections.Dictionary",
-            Variant.Type.Array => hint is PropertyHint.ArrayType? $"Godot.Collections.Array<Godot.GodotObject>" :"Godot.Collections.Array",
+            Variant.Type.Array => hint is PropertyHint.ArrayType ? $"Godot.Collections.Array<Godot.GodotObject>" :"Godot.Collections.Array",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 
