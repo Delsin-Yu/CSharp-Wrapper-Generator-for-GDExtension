@@ -23,7 +23,11 @@ internal static partial class TypeCollector
         "RenderBuffersGI",
         "ScriptEditorQuickOpen",
         "ScriptTextEditor",
-        "UniformSetCacheRD"
+        "UniformSetCacheRD",
+        "EditorHelp",
+        "FindBar",
+        "GodotPhysicsDirectSpaceState2D",
+        "NativeMenuWindows",
     ];
     public static bool TryCollectGDExtensionTypes(out string[] gdeClassTypes, out ICollection<string> godotBuiltinTypeNames)
     {
