@@ -34,10 +34,17 @@ internal static partial class CodeGenerator
             .Where(
                 methodInfo =>
                 {
+
                     var methodNativeName = methodInfo.NativeName;
 
                     if (methodNativeName.Length <= 4) return true;
 
+#if GODOT4_4_OR_GREATER
+                    if (propertyInfos.Any(propertyInfo => propertyInfo.IsProperty(methodNativeName)))
+                    {
+                        return false;
+                    }
+#else
                     if (methodNativeName.StartsWith("get_") || methodNativeName.StartsWith(("set_")))
                     {
                         var trimmedNativeName = methodNativeName[4..];
@@ -52,7 +59,7 @@ internal static partial class CodeGenerator
                                 }
                             )) return false;
                     }
-
+#endif
                     return true;
                 }
             )
