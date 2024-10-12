@@ -10,6 +10,18 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class TypeCollector
 {
+
+#if GODOT4_4_OR_GREATER
+    public static bool TryCollectGDExtensionTypes(out string[] gdeClassTypes, out ICollection<string> godotBuiltinTypeNames)
+    {
+        var classList = ClassDB.GetClassList();
+        godotBuiltinTypeNames = classList
+            .Where(x => ClassDB.ClassGetApiType(x) is ClassDB.ApiType.Core or ClassDB.ApiType.Editor).ToHashSet();
+        gdeClassTypes =  classList
+            .Where(x => ClassDB.ClassGetApiType(x) is ClassDB.ApiType.Extension or ClassDB.ApiType.EditorExtension).ToArray();
+        return true;
+    }
+#else
     public static readonly HashSet<string> BanClassType =
     [
         "CodeTextEditor",
@@ -89,8 +101,7 @@ internal static partial class TypeCollector
             .ToArray();
         return true;
     }
-
-    private static string CreateTempDirectory()
+        private static string CreateTempDirectory()
     {
         var tempPath = Path.GetTempFileName();
         File.Delete(tempPath);
@@ -153,5 +164,7 @@ internal static partial class TypeCollector
         RegexOptions.Singleline | RegexOptions.NonBacktracking
     )]
     private static partial Regex GetExtractClassNameRegex();
+#endif
+
 
 }

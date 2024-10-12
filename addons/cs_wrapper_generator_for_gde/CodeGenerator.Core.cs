@@ -76,7 +76,7 @@ internal static partial class CodeGenerator
 
               {{TAB1}}[Obsolete("Wrapper classes cannot be constructed with Ctor (it only instantiate the underlying {{engineBaseType}}), please use the {{CreateInstanceMethodName}}() method instead.")]
               {{TAB1}}protected {{displayTypeName}}() { }
-              
+
               {{TAB1}}/// <summary>
               {{TAB1}}/// Creates an instance of the GDExtension <see cref="{{displayTypeName}}"/> type, and attaches the wrapper script to it.
               {{TAB1}}/// </summary>
@@ -85,7 +85,7 @@ internal static partial class CodeGenerator
               {{TAB1}}{
               {{TAB2}}return {{STATIC_HELPER_CLASS}}.{{CreateInstanceMethodName}}<{{displayTypeName}}>({{GDExtensionName}});
               {{TAB1}}}
-              
+
               {{TAB1}}/// <summary>
               {{TAB1}}/// Try to cast the script on the supplied <paramref name="godotObject"/> to the <see cref="{{displayTypeName}}"/> wrapper type,
               {{TAB1}}/// if no script has attached to the type, or the script attached to the type does not inherit the <see cref="{{displayTypeName}}"/> wrapper type,
@@ -134,7 +134,7 @@ internal static partial class CodeGenerator
         var signalsBuilder = new StringBuilder();
         var propertiesBuilder = new StringBuilder();
         var methodsBuilder = new StringBuilder();
-        
+
         ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, gdeTypeMap, propertiesBuilder, backingName);
         ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, methodsBuilder, gdeTypeInfo, backingName);
         ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
@@ -152,8 +152,8 @@ internal static partial class CodeGenerator
 
     [GeneratedRegex(@"<UNRESOLVED_ENUM_TYPE>(?<EnumConstants>.*)<\/UNRESOLVED_ENUM_TYPE>")]
     private static partial Regex GetExtractUnResolvedEnumValueRegex();
-    
-    
+
+
     private readonly struct PropertyInfo
     {
         public readonly Variant.Type Type = Variant.Type.Nil;
@@ -172,10 +172,10 @@ internal static partial class CodeGenerator
             using var hintInfo = dictionary["hint"];
             using var hintStringInfo = dictionary["hint_string"];
             using var usageInfo = dictionary["usage"];
-            
-            Type = typeInfo.As<Variant.Type>();;
+
+            Type = typeInfo.As<Variant.Type>();
             NativeName = nameInfo.AsString();
-            ClassName = classNameInfo.AsString(); 
+            ClassName = classNameInfo.AsString();
             Hint = hintInfo.As<PropertyHint>();
             HintString = hintStringInfo.AsString();
             Usage = usageInfo.As<PropertyUsageFlags>();
@@ -196,13 +196,34 @@ internal static partial class CodeGenerator
         public bool IsVoid => Type is Variant.Type.Nil;
         public bool IsEnum => Hint is PropertyHint.Enum;
         public bool IsArray => Hint is PropertyHint.ArrayType && Type == Variant.Type.Array;
-        
+
         public string GetTypeName() => VariantToTypeName(Type, Hint, TypeClass);
 
         public string GetPropertyName() => EscapeAndFormatName(NativeName);
 
         public string GetArgumentName() => EscapeAndFormatName(NativeName, true);
 
+#if GODOT4_4_OR_GREATER
+        public bool IsProperty(string methodName) => methodName == PropertyGetter || methodName == PropertySetter;
+        public string PropertyGetter => ClassDB.ClassGetPropertyGetter(ClassName, NativeName);
+        public string PropertySetter => ClassDB.ClassGetPropertySetter(ClassName, NativeName);
+        public override string ToString() =>
+            $"""
+             PropertyInfo:
+             {TAB1}{nameof(Type)}: {Type}
+             {TAB1}{nameof(NativeName)}: {NativeName}
+             {TAB1}{nameof(ClassName)}: {ClassName}
+             {TAB1}{nameof(Hint)}: {Hint}
+             {TAB1}{nameof(HintString)}: {HintString}
+             {TAB1}{nameof(Usage)}: {Usage}
+             {TAB1}{nameof(IsGroupOrSubgroup)}: {IsGroupOrSubgroup}
+             {TAB1}{nameof(IsVoid)}: {IsVoid}
+             {TAB1}{nameof(TypeClass)}: {TypeClass}
+             {TAB1}{nameof(PropertyGetter)}: {PropertyGetter}
+             {TAB1}{nameof(PropertySetter)}: {PropertySetter}
+             """;
+
+#else
         public override string ToString() =>
             $"""
              PropertyInfo:
@@ -216,6 +237,7 @@ internal static partial class CodeGenerator
              {TAB1}{nameof(IsVoid)}: {IsVoid}
              {TAB1}{nameof(TypeClass)}: {TypeClass}
              """;
+#endif
     }
 
     private readonly struct MethodInfo
@@ -243,7 +265,7 @@ internal static partial class CodeGenerator
             Arguments = argsInfo.As<Array<Dictionary>>().Select(x => new PropertyInfo(x)).ToArray();
             DefaultArguments = defaultArgsInfo.As<Array<Variant>>().ToArray();
         }
-        
+
         public string GetMethodName() => EscapeAndFormatName(NativeName);
 
         public override string ToString() => $"""
@@ -342,13 +364,13 @@ internal static partial class CodeGenerator
             Variant.Type.String => "string",
             Variant.Type.Object => className,
             Variant.Type.Dictionary => "Godot.Collections.Dictionary",
-            Variant.Type.Array => hint is PropertyHint.ArrayType ? $"Godot.Collections.Array<Godot.GodotObject>" :"Godot.Collections.Array",
+            Variant.Type.Array => hint is PropertyHint.ArrayType ? $"Godot.Collections.Array<Godot.GodotObject>" : "Godot.Collections.Array",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
 
     [GeneratedRegex(@"[^a-zA-Z0-9_]")]
     private static partial Regex EscapeNameRegex();
-    
+
     [GeneratedRegex(@"[0-9]+")]
     private static partial Regex EscapeNameDigitRegex();
 
@@ -371,17 +393,17 @@ internal static partial class CodeGenerator
     private static string EscapeAndFormatName(string sourceName, bool camelCase = false)
     {
         ArgumentOutOfRangeException.ThrowIfNullOrEmpty(sourceName);
-        
+
         var name = EscapeNameRegex()
             .Replace(sourceName, "_")
             .ToPascalCase();
-        
+
         if (camelCase) name = ToCamelCase(name);
-        
+
         if (_csKeyword.Contains(name)) name = $"@{name}";
-        
+
         if (EscapeNameDigitRegex().IsMatch(name[..1])) name = $"_{name}";
-        
+
         return name;
     }
 
