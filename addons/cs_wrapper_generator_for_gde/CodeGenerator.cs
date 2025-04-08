@@ -188,7 +188,7 @@ internal static partial class CodeGenerator
     
     private static Dictionary<string, string> GetGodotSharpTypeNameMap()
     {
-        return typeof(GodotObject)
+        var baseDictionary = typeof(GodotObject)
             .Assembly
             .GetTypes()
             .Select(
@@ -200,6 +200,11 @@ internal static partial class CodeGenerator
             .Where(x => x.Item2 is not null)
             .DistinctBy(x => x.Item2)
             .ToDictionary(x => x.Item2.Name, x => x.x.Name);
+
+        baseDictionary.Add("Vector2i", nameof(Vector2I));
+        baseDictionary.Add("Vector3i", nameof(Vector3I));
+        
+        return baseDictionary;
     }
 
     private record ClassInfo(string TypeName, ClassInfo ParentType);

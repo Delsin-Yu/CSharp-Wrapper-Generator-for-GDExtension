@@ -133,11 +133,18 @@ internal static partial class CodeGenerator
                 }
                 else
                 {
-                    stringBuilder.Append($".As<{methodInfo.ReturnValue.GetTypeName()}>()");
+                    if (!methodInfo.ReturnValue.IsArray || gdeTypeMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
+                    {
+                        stringBuilder.Append($".As<{methodInfo.ReturnValue.GetTypeName()}>()");
+                    }
+                    else
+                    {
+                        stringBuilder.Append($".As<{returnValueName}>()");
+                    }
                 }
             }
             
-            if (methodInfo.ReturnValue.IsArray)
+            if (methodInfo.ReturnValue.IsArray && gdeTypeMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
             {
                 stringBuilder.Append(')');
             }
