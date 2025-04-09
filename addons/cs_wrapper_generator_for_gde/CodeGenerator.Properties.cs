@@ -11,6 +11,7 @@ internal static partial class CodeGenerator
         IReadOnlyList<PropertyInfo> propertyInfos,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
+        HashSet<string> nativeNameCache,
         StringBuilder stringBuilder,
         string backing
     )
@@ -53,6 +54,9 @@ internal static partial class CodeGenerator
 //                                       """
 //                                       );
 
+            nativeNameCache.Add(propertyInfo.NativeName);
+            var cachedNativeName = NativeNameToCachedName(propertyInfo.NativeName);
+
             if (propertyInfo.IsVoid)
             {
                 //   get => Get("saved_value") is { VariantType: not Variant.Type.Nil } _result ? _result : (Variant?)null;
@@ -60,8 +64,8 @@ internal static partial class CodeGenerator
                 stringBuilder
                     .AppendLine($"{TAB1}public Variant? {propertyName}")
                     .AppendLine($"{TAB1}{{")
-                    .AppendLine($$"""{{TAB2}}get => {{backing}}Get("{{propertyInfo.NativeName}}") is { VariantType: not Variant.Type.Nil } _result ? _result : (Variant?)null;""")
-                    .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", value is not null ? Variant.From(value) : new Variant());""")
+                    .AppendLine($$"""{{TAB2}}get => {{backing}}Get({{cachedNativeName}}) is { VariantType: not Variant.Type.Nil } _result ? _result : (Variant?)null;""")
+                    .AppendLine($"""{TAB2}set => {backing}Set({cachedNativeName}, value is not null ? Variant.From(value) : new Variant());""")
                     .AppendLine($"{TAB1}}}")
                     .AppendLine();
                 
@@ -69,14 +73,14 @@ internal static partial class CodeGenerator
             }
             var enumString = propertyInfo.IsEnum && propertyInfo.Type == Variant.Type.Int ? ".As<Int64>()" : string.Empty;
             var castTypeName =  typeName;
-            var getter = $"({castTypeName}){backing}Get(\"{propertyInfo.NativeName}\"){enumString}";
+            var getter = $"({castTypeName}){backing}Get({cachedNativeName}){enumString}";
             if (propertyInfo.IsArray)
             {
                 var typeClass = godotSharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass);
                 if (typeClass == nameof(Variant))
                 {
                     typeName = "Godot.Collections.Array";
-                    getter = $"{backing}Get(\"{propertyInfo.NativeName}\").As<Godot.Collections.Array>()";
+                    getter = $"{backing}Get({cachedNativeName}).As<Godot.Collections.Array>()";
                 }
                 else
                 {
@@ -88,7 +92,7 @@ internal static partial class CodeGenerator
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")
                 .AppendLine($"{TAB1}{{")
                 .AppendLine($"""{TAB2}get => {getter};""")
-                .AppendLine($"""{TAB2}set => {backing}Set("{propertyInfo.NativeName}", Variant.From(value));""")
+                .AppendLine($"""{TAB2}set => {backing}Set({cachedNativeName}, Variant.From(value));""")
                 .AppendLine($"{TAB1}}}")
                 .AppendLine();
         }

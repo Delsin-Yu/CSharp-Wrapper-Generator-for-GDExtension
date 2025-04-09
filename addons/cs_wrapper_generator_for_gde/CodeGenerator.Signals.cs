@@ -13,6 +13,7 @@ internal static partial class CodeGenerator
         IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> builtinTypes,
+        HashSet<string> nativeNameCache,
         string backingName
     )
     {
@@ -156,11 +157,14 @@ internal static partial class CodeGenerator
 
             codeBuilder.AppendLine(");");
 
+            nativeNameCache.Add(signalInfo.NativeName);
+            var signalCachedNativeName = NativeNameToCachedName(signalInfo.NativeName);
+            
             codeBuilder.AppendLine(
                     $$"""
                       {{TAB5}}}
                       {{TAB4}});
-                      {{TAB4}}{{backingName}}Connect("{{signalInfo.NativeName}}", {{backingCallableName}});
+                      {{TAB4}}{{backingName}}Connect({{signalCachedNativeName}}, {{backingCallableName}});
                       {{TAB3}}}
                       {{TAB3}}{{backingDelegateName}} += value;
                       {{TAB2}}}
@@ -170,7 +174,7 @@ internal static partial class CodeGenerator
                       {{TAB3}}
                       {{TAB3}}if({{backingDelegateName}} == null)
                       {{TAB3}}{
-                      {{TAB4}}{{backingName}}Disconnect("{{signalInfo.NativeName}}", {{backingCallableName}});
+                      {{TAB4}}{{backingName}}Disconnect({{signalCachedNativeName}}, {{backingCallableName}});
                       {{TAB4}}{{backingCallableName}} = default;
                       {{TAB3}}}
                       {{TAB2}}}

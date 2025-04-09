@@ -114,7 +114,8 @@ internal static partial class CodeGenerator
         return codeBuilder.Append('}').ToString();
     }
 
-
+    private static string NativeNameToCachedName(string nativeName) => $"_cached_{nativeName}";
+    
     private static void GenerateMembers(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
@@ -125,6 +126,8 @@ internal static partial class CodeGenerator
         string backingName
     )
     {
+        var nativeNameCache = new HashSet<string>();
+        
         var propertyInfoList = CollectPropertyInfo(gdeTypeInfo);
         var methodInfoList = CollectMethodInfo(gdeTypeInfo, propertyInfoList);
         var signalInfoList = CollectSignalInfo(gdeTypeInfo);
@@ -135,16 +138,25 @@ internal static partial class CodeGenerator
         var propertiesBuilder = new StringBuilder();
         var methodsBuilder = new StringBuilder();
 
-        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, inheritanceMap, propertiesBuilder, backingName);
-        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, inheritanceMap, godotBuiltinClassNames, methodsBuilder, gdeTypeInfo, backingName);
-        ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, inheritanceMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
+        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, inheritanceMap, nativeNameCache, propertiesBuilder, backingName);
+        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, inheritanceMap, godotBuiltinClassNames, nativeNameCache, methodsBuilder, gdeTypeInfo, backingName);
+        ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, inheritanceMap, godotSharpTypeNameMap, godotBuiltinClassNames, nativeNameCache, backingName);
         ConstructEnums(occupiedNames, enumInfoList, enumsBuilder, gdeTypeInfo, enumConstantMap);
 
+        var cachedStringNameBuilder = new StringBuilder();
+
+        foreach (var nativeName in nativeNameCache)
+        {
+            var cachedName = NativeNameToCachedName(nativeName);
+            cachedStringNameBuilder.AppendLine($"{TAB1}private static readonly StringName {cachedName} = \"{nativeName}\";");
+        }
+        
         codeBuilder
             .Append(enumsBuilder)
             .Append(propertiesBuilder)
             .Append(signalsBuilder)
-            .Append(methodsBuilder);
+            .Append(methodsBuilder)
+            .Append(cachedStringNameBuilder);
     }
 
     private const string UNRESOLVED_ENUM_HINT = "ENUM_HINT";

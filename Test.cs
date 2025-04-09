@@ -62,12 +62,8 @@ public partial class Test : Node
         _gdCubismUserModel.Free();
         _gdCubismUserModel = null;
 
-        var joltGeneric6DofJoint3D = JoltGeneric6DOFJoint3D.Instantiate();
-        AddChild(joltGeneric6DofJoint3D);
-        GD.Print(joltGeneric6DofJoint3D.AngularLimitYEnabled);
-        joltGeneric6DofJoint3D.AngularLimitYEnabled = false;
-        GD.Print(joltGeneric6DofJoint3D.AngularLimitYEnabled);
-        joltGeneric6DofJoint3D.AngularLimitYEnabled = true;
-        GD.Print(joltGeneric6DofJoint3D.AngularLimitYEnabled);
+        var terrain3DData = Terrain3DData.Instantiate();
+        terrain3DData.ControlMaps = [new Image()];
+        GD.Print(terrain3DData.ControlMaps[0]);
     }
 }

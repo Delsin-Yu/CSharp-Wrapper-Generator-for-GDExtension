@@ -161,7 +161,7 @@ internal static partial class CodeGenerator
                 /// <param name="method">The method name.</param>
                 /// <param name="arguments">The arguments.</param>
                 /// <returns>The return value of the method.</returns>
-                public static Variant Call(string className, string method, params Variant[] arguments)
+                public static Variant Call(StringName className, StringName method, params Variant[] arguments)
                 {
                     return _instances.GetOrAdd(className,InstantiateStaticFactory).Call(method, arguments);
                 }

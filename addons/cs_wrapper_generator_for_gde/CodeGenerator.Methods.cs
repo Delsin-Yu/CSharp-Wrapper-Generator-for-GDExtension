@@ -12,6 +12,7 @@ internal static partial class CodeGenerator
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         ICollection<string> builtinTypeNames,
+        HashSet<string> nativeNameCache,
         StringBuilder stringBuilder,
         ClassInfo classInfo,
         string backing
@@ -31,7 +32,9 @@ internal static partial class CodeGenerator
 
         foreach (var methodInfo in methodInfoList)
         {
-            var methodNativeName = methodInfo.NativeName;
+            nativeNameCache.Add(methodInfo.NativeName);
+            var methodCachedNativeName = NativeNameToCachedName(methodInfo.NativeName);
+            
             var returnValueName = methodInfo.ReturnValue.GetTypeName();
 
             var methodName = methodInfo.GetMethodName();
@@ -94,19 +97,17 @@ internal static partial class CodeGenerator
             {
                 stringBuilder
                     .Append($"{STATIC_HELPER_CLASS}.")
-                    .Append("Call(\"")
-                    .Append(classInfo.TypeName)
-                    .Append("\", \"")
-                    .Append(methodNativeName)
-                    .Append('"');
+                    .Append("Call(")
+                    .Append(GDExtensionName)
+                    .Append(", ")
+                    .Append(methodCachedNativeName);
             }
             else
             {
                 stringBuilder
                     .Append(backing)
-                    .Append("Call(\"")
-                    .Append(methodNativeName)
-                    .Append('"');
+                    .Append("Call(")
+                    .Append(methodCachedNativeName);
             }
 
             if (methodInfo.Arguments.Length > 0)
