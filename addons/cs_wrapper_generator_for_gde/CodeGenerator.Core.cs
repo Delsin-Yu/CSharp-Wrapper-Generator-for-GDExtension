@@ -192,7 +192,21 @@ internal static partial class CodeGenerator
             {
                 TypeClass = ClassName;
                 if (TypeClass.Contains(',')) TypeClass = UNRESOLVED_MULTICLASS_TEMPLATE.Replace(UNRESOLVED_MULTICLASS, TypeClass);
-                if (string.IsNullOrEmpty(TypeClass)) TypeClass = IsArray && HintString.Contains(':') ? HintString[(HintString.IndexOf(':') + 1)..] : HintString;
+                if (string.IsNullOrEmpty(TypeClass))
+                {
+                    if (IsArray && HintString.Contains(':'))
+                    {
+                        TypeClass = HintString[(HintString.IndexOf(':') + 1)..];
+                    }
+                    else if (IsArray && HintString == "unsupported format character")
+                    {
+                        TypeClass = nameof(Variant);
+                    }
+                    else
+                    {
+                        TypeClass = HintString;
+                    }
+                }
                 if (string.IsNullOrEmpty(TypeClass)) TypeClass = nameof(Variant);
             }
         }

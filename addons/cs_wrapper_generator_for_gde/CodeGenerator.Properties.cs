@@ -73,8 +73,16 @@ internal static partial class CodeGenerator
             if (propertyInfo.IsArray)
             {
                 var typeClass = godotSharpTypeNameMap.GetValueOrDefault(propertyInfo.TypeClass, propertyInfo.TypeClass);
-                typeName = typeName.Replace("Godot.GodotObject", typeClass);
-                getter = inheritanceMap.ContainsKey(typeClass) ? $"{STATIC_HELPER_CLASS}.{CastMethodName}<{typeClass}>({getter})" : getter.Replace("Godot.GodotObject", typeClass);
+                if (typeClass == nameof(Variant))
+                {
+                    typeName = "Godot.Collections.Array";
+                    getter = $"{backing}Get(\"{propertyInfo.NativeName}\").As<Godot.Collections.Array>()";
+                }
+                else
+                {
+                    typeName = typeName.Replace("Godot.GodotObject", typeClass);
+                    getter = inheritanceMap.ContainsKey(typeClass) ? $"{STATIC_HELPER_CLASS}.{CastMethodName}<{typeClass}>({getter})" : getter.Replace("Godot.GodotObject", typeClass);
+                }
             }
             stringBuilder
                 .AppendLine($"{TAB1}public {typeName} {propertyName}")
