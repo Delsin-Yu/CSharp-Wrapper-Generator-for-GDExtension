@@ -30,28 +30,12 @@ internal static partial class CodeGenerator
             GenerateClassInheritanceMap(gdeTypeName, classInheritanceMap);
         }
 
-        var generateTasks = new Task<(string, string)>[gdeTypeNames.Length];
+        foreach (var godotName in godotBuiltinTypeNames)
+        {
+            GenerateClassInheritanceMap(godotName, classInheritanceMap);
+        }
 
-        var nonGdeTypes = new List<string>();
-        foreach (var gdeNameCandidate in classInheritanceMap.Keys)
-        {
-            var nameCandidate = gdeNameCandidate;
-            if (godotBuiltinTypeNames.Contains(nameCandidate))
-            {
-                nonGdeTypes.Add(nameCandidate);
-                continue;
-            }
-            nameCandidate = classNameMap.GetValueOrDefault(nameCandidate, nameCandidate);
-            if (godotBuiltinTypeNames.Contains(nameCandidate))
-            {
-                nonGdeTypes.Add(nameCandidate);
-            }
-        }
-        
-        foreach (var builtinTypeName in nonGdeTypes)
-        {
-            classInheritanceMap.Remove(builtinTypeName);
-        }
+        var generateTasks = new Task<(string, string)>[gdeTypeNames.Length];
         
         // Run all the generate logic in parallel.
 
@@ -97,7 +81,27 @@ internal static partial class CodeGenerator
                         return enumName;
                     }
                     
-                    return "ENUM_UNRESOLVED"; 
+                    // At this point it mean the enum value is not provided by the generator,
+                    // Terrain3D is having this issue on its debug_level property, we fall back to long
+                    return  $"long /*{unresolvedConstants}*/";
+                }
+            );
+
+            // Some GDE declares their type as multi-type, in this case we find a common base type to use
+            data.Code = GetExtractUnResolvedMultiClassValueRegex().Replace(
+                data.Code,
+                match =>
+                {
+                    var unresolvedConstants = match.Groups["MultiClassConstants"].Value.Replace(" ", "");
+                    if (string.IsNullOrEmpty(unresolvedConstants)) return "ENUM_UNRESOLVED";
+                    var split = unresolvedConstants
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                    var commonBaseType = FindCommonBaseType(split, classInheritanceMap);
+                    
+                    return commonBaseType is null 
+                        ? $"Godot.GodotObject /*{unresolvedConstants}*/" 
+                        : $"{commonBaseType.TypeName} /*{unresolvedConstants}*/";
                 }
             );
         }
@@ -105,6 +109,34 @@ internal static partial class CodeGenerator
         return generated;
     }
 
+    private static ClassInfo FindCommonBaseType(string[] typeNames, Dictionary<string, ClassInfo> inheritanceMap)
+    {
+        if (typeNames.Length == 0) return null;
+
+        var typeChains = new List<HashSet<ClassInfo>>();
+
+        foreach (var typeName in typeNames)
+        {
+            var typeChain = new HashSet<ClassInfo>();
+            var currentType = typeName;
+            while (currentType != null)
+            {
+                if (!inheritanceMap.TryGetValue(currentType, out var typeInfo)) return null;
+                typeChain.Add(typeInfo);
+                currentType = typeInfo.ParentType?.TypeName;
+            }
+            typeChains.Add(typeChain);
+        }
+
+        var commonBaseTypes = typeChains[0];
+
+        foreach (var typeChain in typeChains.Skip(1))
+        {
+            commonBaseTypes.IntersectWith(typeChain);
+        }
+        
+        return commonBaseTypes.OrderByDescending(x => x.GetInheritanceDepth()).FirstOrDefault();
+    }
 
     private const string STATIC_HELPER_CLASS = "GDExtensionHelper";
 
@@ -185,29 +217,76 @@ internal static partial class CodeGenerator
 
         return ($"_{STATIC_HELPER_CLASS}", sourceCode);
     }
-    
+
+    private static bool IsGodotObjectChild(Type type)
+    {
+        if (type == null) return false;
+        if (type == typeof(GodotObject)) return true;
+
+        var baseType = type.BaseType;
+        while (baseType != null)
+        {
+            if (baseType == typeof(GodotObject)) return true;
+            baseType = baseType.BaseType;
+        }
+
+        return false;
+    }
+
     private static Dictionary<string, string> GetGodotSharpTypeNameMap()
     {
         var baseDictionary = typeof(GodotObject)
             .Assembly
             .GetTypes()
             .Select(
-                x => (x,
-                    x.GetCustomAttributes()
+                x =>
+                {
+                    var godotNativeName = x.GetCustomAttributes()
                         .OfType<GodotClassNameAttribute>()
-                        .FirstOrDefault())
-            )
-            .Where(x => x.Item2 is not null)
-            .DistinctBy(x => x.Item2)
-            .ToDictionary(x => x.Item2.Name, x => x.x.Name);
+                        .FirstOrDefault()?.Name ?? x.Name;
 
+                    return (x, godotNativeName);
+                }
+            )
+            .Where(x => IsGodotObjectChild(x.x))
+            .DistinctBy(x => x.godotNativeName)
+            .ToDictionary(x => x.godotNativeName, x => x.x.Name);
+
+        baseDictionary.Add("Vector2", nameof(Vector2));
         baseDictionary.Add("Vector2i", nameof(Vector2I));
+        baseDictionary.Add("Rect2", nameof(Rect2));
+        baseDictionary.Add("Rect2i", nameof(Rect2I));
+        baseDictionary.Add("Transform2D", nameof(Transform2D));
+        baseDictionary.Add("Vector3", nameof(Vector3));
         baseDictionary.Add("Vector3i", nameof(Vector3I));
-        
+        baseDictionary.Add("Basis", nameof(Basis));
+        baseDictionary.Add("Quaternion", nameof(Quaternion));
+        baseDictionary.Add("Transform3D", nameof(Transform3D));
+        baseDictionary.Add("AABB", nameof(Aabb));
+        baseDictionary.Add("Color", nameof(Color));
+        baseDictionary.Add("Plane", nameof(Plane));
+        baseDictionary.Add("Vector4", nameof(Vector4));
+        baseDictionary.Add("Vector4i", nameof(Vector4I));
+        baseDictionary.Add("Projection", nameof(Projection));
+
         return baseDictionary;
     }
 
-    private record ClassInfo(string TypeName, ClassInfo ParentType);
+    private record ClassInfo(string TypeName, ClassInfo ParentType)
+    {
+        public int GetInheritanceDepth()
+        {
+            var depth = 0;
+            var currentType = ParentType;
+            while (currentType != null)
+            {
+                depth++;
+                currentType = currentType.ParentType;
+            }
+
+            return depth;
+        }
+    }
 
     private static void GenerateClassInheritanceMap(
         string className,
@@ -222,9 +301,15 @@ internal static partial class CodeGenerator
                 GenerateClassInheritanceMap(parentTypeName, classInheritanceMap);
             classInfo = new(className, classInheritanceMap[parentTypeName]);
         }
-        else
+        else if (className == nameof(Variant))
         {
             classInfo = new(className, null);
+        }
+        else
+        {
+            if (!classInheritanceMap.ContainsKey("Variant"))
+                GenerateClassInheritanceMap("Variant", classInheritanceMap);
+            classInfo = new(className, classInheritanceMap["Variant"]);
         }
 
         classInheritanceMap.TryAdd(className, classInfo);

@@ -10,7 +10,7 @@ internal static partial class CodeGenerator
         ICollection<string> occupiedNames,
         IReadOnlyList<MethodInfo> signalList,
         StringBuilder codeBuilder,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> builtinTypes,
         string backingName
@@ -125,14 +125,14 @@ internal static partial class CodeGenerator
                 var argumentType = argumentInfo.GetTypeName();
                 argumentType = godotSharpTypeNameMap.GetValueOrDefault(argumentType, argumentType);
                 codeBuilder.Append($"{TAB6}var {convertedArgName} = ");
-                if (gdeTypeMap.ContainsKey(argumentType))
+                if (inheritanceMap.ContainsKey(argumentType))
                     codeBuilder.AppendLine($"{STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{argumentType}>({variantArgName}.As<GodotObject>());");
                 else
                 {
                     if (argumentInfo.IsArray)
                     {
                         var typeClass = godotSharpTypeNameMap.GetValueOrDefault(argumentInfo.TypeClass, argumentInfo.TypeClass);
-                        if (gdeTypeMap.ContainsKey(typeClass))
+                        if (inheritanceMap.ContainsKey(typeClass))
                             codeBuilder.AppendLine($"{STATIC_HELPER_CLASS}.{CastMethodName}<{typeClass}>({variantArgName}.As<Godot.Collections.Array<Godot.GodotObject>>());");
                         else
                             codeBuilder.AppendLine($"{variantArgName}.As<Godot.Collections.Array<{typeClass}>>());");

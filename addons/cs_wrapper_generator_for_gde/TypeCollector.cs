@@ -16,7 +16,7 @@ internal static partial class TypeCollector
     {
         var classList = ClassDB.GetClassList();
         godotBuiltinTypeNames = classList
-            .Where(x => ClassDB.ClassGetApiType(x) is ClassDB.ApiType.Core or ClassDB.ApiType.Editor).ToHashSet();
+            .Where(x => ClassDB.ClassGetApiType(x) is ClassDB.ApiType.Core or ClassDB.ApiType.Editor).Append("Variant").ToHashSet();
         gdeClassTypes =  classList
             .Where(x => ClassDB.ClassGetApiType(x) is ClassDB.ApiType.Extension or ClassDB.ApiType.EditorExtension).ToArray();
         return true;

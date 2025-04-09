@@ -14,13 +14,13 @@ internal static partial class CodeGenerator
     private static (string fileName, string fileContent) GenerateSourceCodeForType(
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         ICollection<string> godotBuiltinClassNames,
         ConcurrentDictionary<string, string> enumNameToConstantMap)
     {
         var builtCode = GenerateCode(
             gdeTypeInfo,
-            gdeTypeMap,
+            inheritanceMap,
             godotSharpTypeNameMap,
             godotBuiltinClassNames,
             enumNameToConstantMap
@@ -43,7 +43,7 @@ internal static partial class CodeGenerator
 
     private static string GenerateCode(
         ClassInfo gdeTypeInfo,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames,
         ConcurrentDictionary<string, string> enumNameToConstantMap)
@@ -104,7 +104,7 @@ internal static partial class CodeGenerator
         GenerateMembers(
             codeBuilder,
             gdeTypeInfo,
-            gdeTypeMap,
+            inheritanceMap,
             godotSharpTypeNameMap,
             godotBuiltinClassNames,
             enumNameToConstantMap,
@@ -118,7 +118,7 @@ internal static partial class CodeGenerator
     private static void GenerateMembers(
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames,
         ConcurrentDictionary<string, string> enumConstantMap,
@@ -135,9 +135,9 @@ internal static partial class CodeGenerator
         var propertiesBuilder = new StringBuilder();
         var methodsBuilder = new StringBuilder();
 
-        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, gdeTypeMap, propertiesBuilder, backingName);
-        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, gdeTypeMap, godotBuiltinClassNames, methodsBuilder, gdeTypeInfo, backingName);
-        ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, gdeTypeMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
+        ConstructProperties(occupiedNames, propertyInfoList, godotSharpTypeNameMap, inheritanceMap, propertiesBuilder, backingName);
+        ConstructMethods(occupiedNames, methodInfoList, godotSharpTypeNameMap, inheritanceMap, godotBuiltinClassNames, methodsBuilder, gdeTypeInfo, backingName);
+        ConstructSignals(occupiedNames, signalInfoList, signalsBuilder, inheritanceMap, godotSharpTypeNameMap, godotBuiltinClassNames, backingName);
         ConstructEnums(occupiedNames, enumInfoList, enumsBuilder, gdeTypeInfo, enumConstantMap);
 
         codeBuilder
@@ -149,10 +149,14 @@ internal static partial class CodeGenerator
 
     private const string UNRESOLVED_ENUM_HINT = "ENUM_HINT";
     private const string UNRESOLVED_ENUM_TEMPLATE = $"<UNRESOLVED_ENUM_TYPE>{UNRESOLVED_ENUM_HINT}</UNRESOLVED_ENUM_TYPE>";
+    private const string UNRESOLVED_MULTICLASS = "MULTICLASS_HINT";
+    private const string UNRESOLVED_MULTICLASS_TEMPLATE = $"<UNRESOLVED_MULTICLASS_TYPE>{UNRESOLVED_MULTICLASS}</UNRESOLVED_MULTICLASS_TYPE>";
 
     [GeneratedRegex(@"<UNRESOLVED_ENUM_TYPE>(?<EnumConstants>.*)<\/UNRESOLVED_ENUM_TYPE>")]
     private static partial Regex GetExtractUnResolvedEnumValueRegex();
 
+    [GeneratedRegex(@"<UNRESOLVED_MULTICLASS_TYPE>(?<MultiClassConstants>.*)<\/UNRESOLVED_MULTICLASS_TYPE>")]
+    private static partial Regex GetExtractUnResolvedMultiClassValueRegex();
 
     private readonly struct PropertyInfo
     {
@@ -187,6 +191,7 @@ internal static partial class CodeGenerator
             else
             {
                 TypeClass = ClassName;
+                if (TypeClass.Contains(',')) TypeClass = UNRESOLVED_MULTICLASS_TEMPLATE.Replace(UNRESOLVED_MULTICLASS, TypeClass);
                 if (string.IsNullOrEmpty(TypeClass)) TypeClass = IsArray && HintString.Contains(':') ? HintString[(HintString.IndexOf(':') + 1)..] : HintString;
                 if (string.IsNullOrEmpty(TypeClass)) TypeClass = nameof(Variant);
             }

@@ -10,7 +10,7 @@ internal static partial class CodeGenerator
         HashSet<string> occupiedNames,
         IReadOnlyList<MethodInfo> methodInfoList,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
-        IReadOnlyDictionary<string, ClassInfo> gdeTypeMap,
+        IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         ICollection<string> builtinTypeNames,
         StringBuilder stringBuilder,
         ClassInfo classInfo,
@@ -79,13 +79,13 @@ internal static partial class CodeGenerator
             
             stringBuilder.Append(" => ");
             
-            if (methodInfo.ReturnValue.IsArray && gdeTypeMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
+            if (methodInfo.ReturnValue.IsArray && inheritanceMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
             {
                 stringBuilder.Append($"{STATIC_HELPER_CLASS}.{CastMethodName}<{methodInfo.ReturnValue.TypeClass}>(");
             }
             
             if (!methodInfo.ReturnValue.IsVoid &&
-                gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
+                inheritanceMap.TryGetValue(methodInfo.ReturnValue.ClassName, out var returnTypeInfo))
             {
                 stringBuilder.Append($"{STATIC_HELPER_CLASS}.{VariantToInstanceMethodName}<{returnTypeInfo.TypeName}>(");
             }
@@ -115,7 +115,7 @@ internal static partial class CodeGenerator
                 BuildupMethodCallArguments(
                     stringBuilder,
                     methodInfo.Arguments,
-                    gdeTypeMap,
+                    inheritanceMap,
                     godotSharpTypeNameMap,
                     builtinTypeNames
                 );
@@ -127,13 +127,13 @@ internal static partial class CodeGenerator
 
             if (!methodInfo.ReturnValue.IsVoid)
             {
-                if (gdeTypeMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
+                if (inheritanceMap.TryGetValue(methodInfo.ReturnValue.ClassName, out returnTypeInfo))
                 {
                     stringBuilder.Append($".{VariantToGodotObject})");
                 }
                 else
                 {
-                    if (!methodInfo.ReturnValue.IsArray || gdeTypeMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
+                    if (!methodInfo.ReturnValue.IsArray || inheritanceMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
                     {
                         stringBuilder.Append($".As<{methodInfo.ReturnValue.GetTypeName()}>()");
                     }
@@ -144,7 +144,7 @@ internal static partial class CodeGenerator
                 }
             }
             
-            if (methodInfo.ReturnValue.IsArray && gdeTypeMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
+            if (methodInfo.ReturnValue.IsArray && inheritanceMap.ContainsKey(methodInfo.ReturnValue.TypeClass))
             {
                 stringBuilder.Append(')');
             }
