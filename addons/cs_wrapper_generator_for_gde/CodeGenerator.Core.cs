@@ -11,22 +11,23 @@ namespace GDExtensionAPIGenerator;
 
 internal static partial class CodeGenerator
 {
-    private static (string fileName, string fileContent) GenerateSourceCodeForType(
+    private static void GenerateSourceCodeForType(
+        bool includeTests,
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         ICollection<string> godotBuiltinClassNames,
-        ConcurrentDictionary<string, string> enumNameToConstantMap)
-    {
-        var builtCode = GenerateCode(
+        ConcurrentDictionary<string, string> enumNameToConstantMap,
+        ConcurrentDictionary<string, ConcurrentBag<FileData>> files) =>
+        GenerateCode(
+            includeTests,
             gdeTypeInfo,
             inheritanceMap,
             godotSharpTypeNameMap,
             godotBuiltinClassNames,
-            enumNameToConstantMap
+            enumNameToConstantMap,
+            files
         );
-        return (gdeTypeInfo.TypeName, builtCode);
-    }
 
     private const string TAB1 = "    ";
     private const string TAB2 = TAB1 + TAB1;
@@ -41,18 +42,20 @@ internal static partial class CodeGenerator
     private const string VariantToGodotObject = "As<GodotObject>()";
     private const string GDExtensionName = "GDExtensionName";
 
-    private static string GenerateCode(
+    private static void GenerateCode(
+        bool includeTests,
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames,
-        ConcurrentDictionary<string, string> enumNameToConstantMap)
+        ConcurrentDictionary<string, string> enumNameToConstantMap,
+        ConcurrentDictionary<string, ConcurrentBag<FileData>> files)
     {
         var codeBuilder = new StringBuilder();
         var displayTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.TypeName, gdeTypeInfo.TypeName);
         var displayParentTypeName = godotSharpTypeNameMap.GetValueOrDefault(gdeTypeInfo.ParentType.TypeName, gdeTypeInfo.ParentType.TypeName);
 
-        var isAbstract = !ClassDB.CanInstantiate(gdeTypeInfo.TypeName);
+        var canInstantiate = !ClassDB.CanInstantiate(gdeTypeInfo.TypeName);
 
         var engineBaseType = GetEngineBaseType(gdeTypeInfo, godotBuiltinClassNames);
 
@@ -60,7 +63,7 @@ internal static partial class CodeGenerator
 
         engineBaseType = godotSharpTypeNameMap.GetValueOrDefault(engineBaseType, engineBaseType);
 
-        var abstractKeyWord = isAbstract ? "abstract " : string.Empty;
+        var abstractKeyWord = canInstantiate ? "abstract " : string.Empty;
         var newKeyWord = isRootWrapper ? string.Empty : "new ";
 
         codeBuilder.AppendLine(
@@ -102,29 +105,32 @@ internal static partial class CodeGenerator
         );
 
         GenerateMembers(
+            canInstantiate,
+            includeTests,
             codeBuilder,
             gdeTypeInfo,
             inheritanceMap,
             godotSharpTypeNameMap,
             godotBuiltinClassNames,
             enumNameToConstantMap,
+            files,
             string.Empty
         );
-
-        return codeBuilder.Append('}').ToString();
     }
 
     private static string NativeNameToCachedName(string nativeName) => $"_cached_{nativeName}";
     
     private static void GenerateMembers(
+        bool isAbstract,
+        bool includeTests,
         StringBuilder codeBuilder,
         ClassInfo gdeTypeInfo,
         IReadOnlyDictionary<string, ClassInfo> inheritanceMap,
         IReadOnlyDictionary<string, string> godotSharpTypeNameMap,
         ICollection<string> godotBuiltinClassNames,
         ConcurrentDictionary<string, string> enumConstantMap,
-        string backingName
-    )
+        ConcurrentDictionary<string, ConcurrentBag<FileData>> files,
+        string backingName)
     {
         var nativeNameCache = new HashSet<string>();
         
@@ -157,6 +163,60 @@ internal static partial class CodeGenerator
             .Append(signalsBuilder)
             .Append(methodsBuilder)
             .Append(cachedStringNameBuilder);
+        
+        files.GetOrAdd(GeneratorMain.WRAPPERS_DIR_NAME, _ => new())
+            .Add(
+                new()
+                {
+                    FileName = gdeTypeInfo.TypeName,
+                    Code = codeBuilder.Append('}').ToString()
+                }
+            );
+        
+        if(!includeTests) return;
+        var testCodeBuilder = new StringBuilder();
+
+        var testTypeName = $"{gdeTypeInfo.TypeName}_Test";
+        
+        testCodeBuilder.AppendLine(
+            $$"""
+              using GDExtension.Wrappers;
+              using GdUnit4;
+              
+              namespace GDExtensionAPIGenerator.Tests;
+
+              [TestSuite]
+              public class {{testTypeName}}
+              {
+
+              """
+        );
+
+        if (!isAbstract)
+        {
+            testCodeBuilder.AppendLine(
+                $$"""
+                  {{TAB1}}[TestCase]
+                  {{TAB1}}public void Constructor()
+                  {{TAB1}}{
+                  {{TAB2}}var instance = {{NAMESPACE}}.{{gdeTypeInfo.TypeName}}.{{CreateInstanceMethodName}}();
+                  {{TAB2}}instance.Free();
+                  {{TAB1}}}
+                  
+                  """
+            );
+        }
+
+        testCodeBuilder.AppendLine("}");
+        
+        files.GetOrAdd(GeneratorMain.WRAPPERSTest_DIR_NAME, _ => new())
+            .Add(
+                new()
+                {
+                    FileName = testTypeName,
+                    Code = testCodeBuilder.ToString()
+                }
+            );
     }
 
     private const string UNRESOLVED_ENUM_HINT = "ENUM_HINT";

@@ -33,6 +33,7 @@ tests/metadata.json
 # Godot ignores
 GDTask/nupkg
 GDExtensionWrappers/
+GDExtensionWrappers.Tests/
 
 *~*
 addons/debug_draw_3d/gen
