@@ -21,7 +21,7 @@ project/assembly_name="GDExtensionAPIGenerator"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/cs_wrapper_generator_for_gde/plugin.cfg", "res://addons/gdUnit4/plugin.cfg")
+enabled=PackedStringArray("res://addons/csharp_wrapper_generator_for_gdextension/plugin.cfg", "res://addons/gdUnit4/plugin.cfg")
 
 [physics]
 
