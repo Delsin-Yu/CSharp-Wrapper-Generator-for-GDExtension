@@ -1,4 +1,8 @@
 #if TOOLS
+using System.Collections.Concurrent;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using Godot;
 
 namespace GDExtensionAPIGenerator;
@@ -30,8 +34,24 @@ public partial class WrapperGeneratorMain : EditorPlugin
         _vbox.Free();
     }
 
-    private void DoGenerate() =>
-        GeneratorMain.Generate(_includeTestsCheckBox.ButtonPressed);
+    private static void DoGenerate()
+    {
+        TypeCollector.CreateClassDiagram(out var gdExtensionTypes);
+        var files = new ConcurrentBag<WrapperFile>();
+        var warnings = new ConcurrentBag<string>();
+        gdExtensionTypes
+            .AsParallel()
+            .ForAll(type => TypeWriter.WriteType(type, files, warnings));
+        var outputDir = ProjectSettings.GlobalizePath("res://GDExtensionWrappers");
+        if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+        Directory.CreateDirectory(outputDir!);
+        files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
+        var warningArray = warnings.ToHashSet().Order().ToArray();
+        if(warningArray.Length == 0) return;
+        GD.PrintErr($"({warningArray.Length}) warning(s) during rendering the GDExtension wrapper classes:");
+        foreach (var warningMessage in warningArray) 
+            GD.PrintErr(warningMessage);
+    }
 }
 
 
