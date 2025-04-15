@@ -148,6 +148,26 @@ public partial class WrapperGeneratorMain
                 enumInfo.RenderEnum(classBuilder, warnings);
                 classBuilder.AppendLine();
             }
+
+            RenderCacheString(
+                classBuilder,
+                "GDExtensionSignalName",
+                Signals,
+                info => (info.CSharpFunctionName, info.GodotFunctionName)
+            );
+
+            foreach (var signalInfo in Signals)
+            {
+                signalInfo.RenderSignal(classBuilder, warnings);
+                classBuilder.AppendLine();
+            }
+            
+            RenderCacheString(
+                classBuilder,
+                "GDExtensionMethodName",
+                Methods,
+                info => (info.CSharpFunctionName, info.GodotFunctionName)
+            );
             
             foreach (var methodInfo in Methods)
             {
@@ -157,6 +177,30 @@ public partial class WrapperGeneratorMain
 
             classBuilder
                 .AppendLine("}");
+        }
+
+        private static void RenderCacheString<T>(StringBuilder builder, string className, IEnumerable<T> elements, Func<T, (string CSharpName, string GodotName)> selector)
+        {
+            builder.AppendLine(
+                $$"""
+                  {{__}}public new class {{className}}
+                  {{__}}{
+                  """
+            );
+
+            foreach (var element in elements)
+            {
+                var (elementCSharpName, elementGodotName) = selector(element);
+                builder.AppendLine($"{__ + __}public new static readonly StringName {elementCSharpName} = \"{elementGodotName}\";");
+            }
+
+            builder.AppendLine(
+                $$"""
+                  {{__}}}
+
+                  """
+            );
+
         }
     }
 
@@ -366,11 +410,49 @@ public partial class WrapperGeneratorMain
     {
         public override string ToString() => $"{Type} {CSharpName}";
 
+        public void RenderCSharpToVariant(StringBuilder builder)
+        {
+            if (Type is GodotEnumType)
+            {
+                builder
+                    .Append("Variant.From(")
+                    .Append(EscapeCSharpKeyWords(CSharpName))
+                    .Append(')');
+            }
+            else
+            {
+                builder.Append(EscapeCSharpKeyWords(CSharpName));
+            }
+        }
+        
+        public void RenderVariantToCSharp(StringBuilder marshallingBuilder, ConcurrentBag<string> warnings)
+        {
+            marshallingBuilder.Append(EscapeCSharpKeyWords(CSharpName));
+            VariantToCSharp(marshallingBuilder, warnings);
+        }
+
+        public void RenderName(StringBuilder builder) => 
+            builder.Append(EscapeCSharpKeyWords(CSharpName));
+
+        public void RenderTypeArgument(StringBuilder methodTypeArgumentBuilder, ConcurrentBag<string> warnings)
+        {
+            if (Usage.HasFlag(PropertyUsageFlags.NilIsVariant)) methodTypeArgumentBuilder.Append("Variant");
+            else Type.Render(methodTypeArgumentBuilder, warnings);
+        }
+        
         public void Render(StringBuilder methodBuilder, ConcurrentBag<string> warnings)
         {
-            if (Usage.HasFlag(PropertyUsageFlags.NilIsVariant)) methodBuilder.Append("Variant");
-            else Type.Render(methodBuilder, warnings);
-            methodBuilder.Append(' ').Append(EscapeCSharpKeyWords(CSharpName));
+            RenderTypeArgument(methodBuilder, warnings);
+            methodBuilder.Append(' ');
+            methodBuilder.Append(EscapeCSharpKeyWords(CSharpName));
+        }
+
+        public void VariantToCSharp(StringBuilder marshallingBuilder, ConcurrentBag<string> warnings)
+        {
+            if(Type is GodotAnnotatedVariantType { VariantType: Variant.Type.Nil }) return;
+            marshallingBuilder.Append(".As<");
+            Type.Render(marshallingBuilder, warnings);
+            marshallingBuilder.Append(">()");
         }
     }
     
@@ -418,6 +500,18 @@ public partial class WrapperGeneratorMain
             Variant.Type.PackedVector2Array, Variant.Type.PackedVector3Array, Variant.Type.PackedColorArray, Variant.Type.PackedVector4Array
         ];
 
+        public void RenderCSharpToVariant(StringBuilder methodArgumentBuilder) => 
+            Info.RenderCSharpToVariant(methodArgumentBuilder);
+
+        public void RenderVariantToCSharp(StringBuilder methodArgumentBuilder, ConcurrentBag<string> warnings) => 
+            Info.RenderVariantToCSharp(methodArgumentBuilder, warnings);
+
+        public void RenderVariant(StringBuilder builder)
+        {
+            builder.Append("Variant ");
+            Info.RenderName(builder);
+        }
+        
         public void Render(StringBuilder methodBuilder, ConcurrentBag<string> warnings)
         {
             Info.Render(methodBuilder, warnings);
@@ -514,13 +608,90 @@ public partial class WrapperGeneratorMain
         public void RenderMethod(StringBuilder methodBuilder, ConcurrentBag<string> warnings)
         {
             methodBuilder.Append($"{__}public new ");
-            if (Flags.HasFlag(MethodFlags.Static)) methodBuilder.Append("static ");
-            if (Flags.HasFlag(MethodFlags.Virtual)) methodBuilder.Append("virtual ");
+            var isStatic = Flags.HasFlag(MethodFlags.Static);
+            var isVirtual = Flags.HasFlag(MethodFlags.Virtual);
+            if (isStatic) methodBuilder.Append("static ");
+            if (isVirtual) methodBuilder.Append("virtual ");
             ReturnValue.Type.Render(methodBuilder, warnings);
             methodBuilder.Append(' ').Append(CSharpFunctionName);
             RenderArguments(methodBuilder, warnings);
-            // TODO: Method Call
-            methodBuilder.AppendLine(" => throw new NotImplementedException();");
+            methodBuilder.AppendLine(" => ").Append(__ + __);
+            if (isStatic) methodBuilder.Append("ClassDB.ClassCallStatic(NativeName, ");
+            else methodBuilder.Append("Call(");
+            methodBuilder.Append($"GDExtensionMethodName.{CSharpFunctionName}, [");
+            
+            var isFirst = true;
+            foreach (var methodArgument in FunctionArguments)
+            {
+                if (isFirst) isFirst = false;
+                else methodBuilder.Append(", ");
+                methodArgument.RenderCSharpToVariant(methodBuilder);
+            }
+
+            methodBuilder.Append("])");
+            ReturnValue.VariantToCSharp(methodBuilder, warnings);
+            methodBuilder.AppendLine(";");
+        }
+
+        public void RenderSignal(StringBuilder signalBuilder, ConcurrentBag<string> warnings)
+        {
+            var signalName = $"{CSharpFunctionName}Signal";
+            var signalDelegateName = $"{signalName}Handler";
+            var signalNameCamelCase = signalName.ToCamelCase();
+            var backingDelegateName = $"_{signalNameCamelCase}";
+            var backingCallableName = $"_{signalNameCamelCase}Callable";
+            
+            signalBuilder.Append($"{__}public new delegate ");
+            ReturnValue.Type.Render(signalBuilder, warnings);
+            signalBuilder.Append($" {signalDelegateName}");
+            RenderArguments(signalBuilder, warnings);
+            signalBuilder.AppendLine(";");
+            signalBuilder.Append(
+                $$"""
+                {{__}}private {{signalDelegateName}} {{backingDelegateName}};
+                {{__}}private Callable {{backingCallableName}};
+                {{__}}public event {{signalDelegateName}} {{signalName}}
+                {{__}}{
+                {{__ + __}}add
+                {{__ + __}}{
+                {{__ + __ + __}}if ({{backingDelegateName}} is null)
+                {{__ + __ + __}}{
+                {{__ + __ + __ + __}}{{backingCallableName}} = Callable.From(
+                """
+            );
+
+            RenderVariantTypeArgument(signalBuilder);
+
+            signalBuilder
+                .AppendLine(" => ")
+                .Append($"{__ + __ + __ + __ + __}{backingDelegateName}?.Invoke(");
+
+            var isFirst = true;
+            foreach (var methodArgument in FunctionArguments)
+            {
+                if (isFirst) isFirst = false;
+                else signalBuilder.Append(", ");
+                methodArgument.RenderVariantToCSharp(signalBuilder, warnings);
+            }
+
+            signalBuilder.AppendLine("));");
+
+            signalBuilder.AppendLine(
+                $$"""
+                  {{__ + __ + __ + __}}Connect(GDExtensionSignalName.{{CSharpFunctionName}}, {{backingCallableName}});
+                  {{__ + __ + __}}}
+                  {{__ + __ + __}}{{backingDelegateName}} += value;
+                  {{__ + __}}}
+                  {{__ + __}}remove
+                  {{__ + __}}{
+                  {{__ + __ + __}}{{backingDelegateName}} -= value;
+                  {{__ + __ + __}}if ({{backingDelegateName}} is not null) return;
+                  {{__ + __ + __}}Disconnect(GDExtensionSignalName.{{CSharpFunctionName}}, {{backingCallableName}});
+                  {{__ + __ + __}}{{backingCallableName}} = default;
+                  {{__ + __}}}
+                  {{__}}}
+                  """
+            );
         }
 
         private void RenderArguments(StringBuilder builder, ConcurrentBag<string> warnings)
@@ -532,6 +703,20 @@ public partial class WrapperGeneratorMain
                 if (isFirst) isFirst = false;
                 else builder.Append(", ");
                 argument.Render(builder, warnings);
+            }
+
+            builder.Append(')');
+        }
+
+        private void RenderVariantTypeArgument(StringBuilder builder)
+        {
+            builder.Append('(');
+            var isFirst = true;
+            foreach (var argument in FunctionArguments)
+            {
+                if (isFirst) isFirst = false;
+                else builder.Append(", ");
+                argument.RenderVariant(builder);
             }
 
             builder.Append(')');
