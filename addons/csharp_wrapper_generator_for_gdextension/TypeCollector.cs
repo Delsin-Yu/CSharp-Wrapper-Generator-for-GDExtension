@@ -203,13 +203,27 @@ public partial class WrapperGeneratorMain
                 foreach (var propertyDefinition in propertyDefinitions)
                 {
                     var propertyInfo = CreatePropertyInfo(propertyDefinition, godotTypeMap);
+                    var csharpPropertyName = propertyInfo.GodotName.ToPascalCase();
+                    if(propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)) continue;
                     var getter = ClassDB.ClassGetPropertyGetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
                     var setter = ClassDB.ClassGetPropertySetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
                     var getterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == getter);
-                    if (getterMethod != null) godotClassType.Methods.Remove(getterMethod);
                     var setterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == setter);
-                    if (setterMethod != null) godotClassType.Methods.Remove(setterMethod);
-                    godotClassType.Properties.Add(new(propertyInfo.GodotName, propertyInfo.GodotName.ToPascalCase(), propertyInfo.Type, getterMethod, setterMethod));
+                    godotClassType.Properties.Add(
+                        new(
+                            propertyInfo.GodotName,
+                            csharpPropertyName,
+                            propertyInfo.Type,
+                            getterMethod,
+                            setterMethod
+                        )
+                    );
+                }
+
+                foreach (var propertyInfo in godotClassType.Properties)
+                {
+                    if(propertyInfo.Getter is not null) godotClassType.Methods.Remove(propertyInfo.Getter);
+                    if(propertyInfo.Setter is not null) godotClassType.Methods.Remove(propertyInfo.Setter);
                 }
             }
 
