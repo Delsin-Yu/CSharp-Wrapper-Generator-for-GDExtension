@@ -275,11 +275,13 @@ public partial class WrapperGeneratorMain
     {
         public string DefaultEnumValue { get; set; }
         
-         public override string ToString() => IsBitField ? $"Flags<{GodotTypeName}>" : $"Enum<{GodotTypeName}>";
+        public override string ToString() => IsBitField ? $"Flags<{GodotTypeName}>" : $"Enum<{GodotTypeName}>";
 
         public List<(string EnumName, long EnumValue)> EnumConstants { get; } = [];
 
         public override HashSet<Variant.Type> Accepts { get; } = [Variant.Type.Int];
+        
+        public bool UseAlias { get; set; }
 
         public override void Render(StringBuilder builder, ConcurrentBag<string> warnings)
         {
@@ -289,20 +291,29 @@ public partial class WrapperGeneratorMain
                 return;
             }
             OwnerType.Render(builder, warnings);
-            builder.Append('.').Append(CSharpTypeName);
+            builder.Append('.');
+            RenderEnumName(builder);
         }
 
         public void RenderEnum(StringBuilder builder, ConcurrentBag<string> warnings)
         {
             if (IsBitField) builder.Append(__).AppendLine("[Flags]");
+            builder.Append($"{__}public enum ");
+            RenderEnumName(builder);
+            builder.AppendLine();
             builder.AppendLine(
                 $$"""
-                  {{__}}public enum {{CSharpTypeName}}
                   {{__}}{
                   {{string.Join('\n', EnumConstants.Select(x => $"{__ + __}{x.EnumName} = {x.EnumValue},"))}}
                   {{__}}}
                   """
             );
+        }
+
+        private void RenderEnumName(StringBuilder builder)
+        {
+            builder.Append(CSharpTypeName);
+            if (UseAlias) builder.Append(IsBitField ? "Flags" : "Enum");
         }
 
         public static string FormatEnumName(string enumName, string enumConstName)

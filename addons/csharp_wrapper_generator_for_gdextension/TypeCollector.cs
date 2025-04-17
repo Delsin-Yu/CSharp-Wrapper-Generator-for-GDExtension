@@ -236,6 +236,17 @@ public partial class WrapperGeneratorMain
                     godotClassType.Signals.Add(signalInfo);
                 }
             }
+            
+            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
+            {
+                foreach (var enumType in godotClassType.Enums)
+                {
+                    if (godotClassType.Methods.All(x => x.CSharpFunctionName != enumType.CSharpTypeName)
+                        && godotClassType.Properties.All(x => x.CSharpPropertyName != enumType.CSharpTypeName)
+                        && godotClassType.Signals.All(x => x.CSharpFunctionName != enumType.CSharpTypeName)) continue;
+                    enumType.UseAlias = true;
+                }
+            }
         }
 
         private static GodotFunctionInfo CreateFunctionInfo(GodotTypeMap godotTypeMap, GodotDictionary methodDefinition)
