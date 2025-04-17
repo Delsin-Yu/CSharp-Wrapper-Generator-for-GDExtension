@@ -23,7 +23,8 @@ public partial class WrapperGeneratorMain
         GodotName GodotTypeName,
         CSharpName CSharpTypeName,
         ClassDB.ApiType ApiType,
-        bool CanInstantiate) : GodotNamedType(GodotTypeName, CSharpTypeName)
+        bool CanInstantiate
+    ) : GodotNamedType(GodotTypeName, CSharpTypeName)
     {
         public int GetInheritanceDepth()
         {
@@ -37,7 +38,7 @@ public partial class WrapperGeneratorMain
 
             return depth;
         }
-        
+
         public GodotNamedType ParentType { get; set; }
         public List<GodotFunctionInfo> Methods { get; } = [];
         public List<GodotFunctionInfo> Signals { get; } = [];
@@ -64,7 +65,7 @@ public partial class WrapperGeneratorMain
         private const string TypeGDExtensionCacheName = "NativeName";
         private const string WrapperConstructorName = "Instantiate";
 
-        public void RenderClass(StringBuilder classBuilder, ConcurrentBag<string> warnings)
+        public void RenderClass(StringBuilder classBuilder, GenerationLogger logger)
         {
             classBuilder.Append(
                 $"""
@@ -158,7 +159,7 @@ public partial class WrapperGeneratorMain
 
             foreach (var enumInfo in Enums)
             {
-                enumInfo.RenderEnum(classBuilder, warnings);
+                enumInfo.RenderEnum(classBuilder, logger);
                 classBuilder.AppendLine();
             }
 
@@ -171,33 +172,33 @@ public partial class WrapperGeneratorMain
 
             foreach (var signalInfo in Signals)
             {
-                signalInfo.RenderSignal(classBuilder, warnings);
+                signalInfo.RenderSignal(classBuilder, logger);
                 classBuilder.AppendLine();
             }
-            
+
             RenderCacheString(
                 classBuilder,
                 "GDExtensionPropertyName",
                 Properties,
                 info => (info.CSharpPropertyName, info.GodotPropertyName)
             );
-            
+
             foreach (var propertyInfo in Properties)
             {
-                propertyInfo.RenderProperty(classBuilder, warnings);
+                propertyInfo.RenderProperty(classBuilder, logger);
                 classBuilder.AppendLine();
             }
-            
+
             RenderCacheString(
                 classBuilder,
                 "GDExtensionMethodName",
                 Methods,
                 info => (info.CSharpFunctionName, info.GodotFunctionName)
             );
-            
+
             foreach (var methodInfo in Methods)
             {
-                methodInfo.RenderMethod(classBuilder, warnings);
+                methodInfo.RenderMethod(classBuilder, logger);
                 classBuilder.AppendLine();
             }
 
@@ -207,8 +208,8 @@ public partial class WrapperGeneratorMain
 
         private static void RenderCacheString<T>(StringBuilder builder, string className, IList<T> elements, Func<T, (string CSharpName, string GodotName)> selector)
         {
-            if(elements.Count == 0) return;
-            
+            if (elements.Count == 0) return;
+
             builder.AppendLine(
                 $$"""
                   {{__}}public new static class {{className}}
@@ -228,16 +229,17 @@ public partial class WrapperGeneratorMain
 
                   """
             );
-
         }
     }
 
     private record GodotAnnotatedVariantType(
         GodotName GodotTypeName,
         CSharpName CSharpTypeName,
-        Variant.Type VariantType) : GodotNamedType(GodotTypeName, CSharpTypeName)
+        Variant.Type VariantType
+    ) : GodotNamedType(GodotTypeName, CSharpTypeName)
     {
-        public override HashSet<Variant.Type> Accepts { get; } = VariantType switch {
+        public override HashSet<Variant.Type> Accepts { get; } = VariantType switch
+        {
             Variant.Type.Nil => [],
             Variant.Type.Bool => [VariantType],
             Variant.Type.Int => [VariantType],
@@ -246,7 +248,12 @@ public partial class WrapperGeneratorMain
             Variant.Type.Object => [VariantType, Variant.Type.Nil],
             _ => [VariantType]
         };
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings) => builder.Append(CSharpTypeName);
+
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
+        {
+            using var _ = logger.BeginScope(ToString());
+            builder.Append(CSharpTypeName);
+        }
 
         public override string ToString() => CSharpTypeName;
     }
@@ -261,11 +268,12 @@ public partial class WrapperGeneratorMain
     {
         public override HashSet<Variant.Type> Accepts { get; } = [Variant.Type.Int];
 
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings)
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
         {
-            BackedType.Render(builder, warnings);
+            using var _ = logger.BeginScope(ToString());
+            BackedType.RenderType(builder, logger);
             builder.Append($"/* {EnumDefine} */");
-            warnings.Add($"Using an unregistered enum type {EnumDefine}.");
+            logger.Add($"Using an unregistered enum type {EnumDefine}.");
         }
 
         public override string ToString() => $"UnDefEnum<{BackedType}/*{EnumDefine}*/>";
@@ -274,29 +282,32 @@ public partial class WrapperGeneratorMain
     private record GodotEnumType(GodotName GodotTypeName, CSharpName CSharpTypeName, GodotType OwnerType, bool IsBitField) : GodotNamedType(GodotTypeName, CSharpTypeName)
     {
         public string DefaultEnumValue { get; set; }
-        
+
         public override string ToString() => IsBitField ? $"Flags<{GodotTypeName}>" : $"Enum<{GodotTypeName}>";
 
         public List<(string EnumName, long EnumValue)> EnumConstants { get; } = [];
 
         public override HashSet<Variant.Type> Accepts { get; } = [Variant.Type.Int];
-        
+
         public bool UseAlias { get; set; }
 
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings)
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(ToString());
             if (OwnerType is null)
             {
                 builder.Append(CSharpTypeName);
                 return;
             }
-            OwnerType.Render(builder, warnings);
+
+            OwnerType.RenderType(builder, logger);
             builder.Append('.');
             RenderEnumName(builder);
         }
 
-        public void RenderEnum(StringBuilder builder, ConcurrentBag<string> warnings)
+        public void RenderEnum(StringBuilder builder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(GodotTypeName);
             if (IsBitField) builder.Append(__).AppendLine("[Flags]");
             builder.Append($"{__}public enum ");
             RenderEnumName(builder);
@@ -358,7 +369,11 @@ public partial class WrapperGeneratorMain
     private abstract record GodotNamedType(GodotName GodotTypeName, CSharpName CSharpTypeName) : GodotType
     {
         public override string ToString() => GodotTypeName;
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings) => builder.Append(CSharpTypeName);
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
+        {
+            using var _ = logger.BeginScope(ToString());
+            builder.Append(CSharpTypeName);
+        }
     }
 
     private record GodotAnnotatedDictionaryType(GodotType KeyType, GodotType ValueType) : GodotType
@@ -367,12 +382,13 @@ public partial class WrapperGeneratorMain
 
         public override HashSet<Variant.Type> Accepts { get; } = [Variant.Type.Dictionary];
 
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings)
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(ToString());
             builder.Append("Dictionary<");
-            KeyType.Render(builder, warnings);
+            KeyType.RenderType(builder, logger);
             builder.Append(", ");
-            ValueType.Render(builder, warnings);
+            ValueType.RenderType(builder, logger);
             builder.Append('>');
         }
     }
@@ -380,11 +396,12 @@ public partial class WrapperGeneratorMain
     private record GodotAnnotatedArrayType(GodotType ElementType) : GodotType
     {
         public override HashSet<Variant.Type> Accepts { get; } = [Variant.Type.Array];
-        
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings)
+
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(ToString());
             builder.Append("Array<");
-            ElementType.Render(builder, warnings);
+            ElementType.RenderType(builder, logger);
             builder.Append('>');
         }
 
@@ -394,17 +411,18 @@ public partial class WrapperGeneratorMain
     private abstract record GodotType
     {
         public abstract HashSet<Variant.Type> Accepts { get; }
-        public abstract void Render(StringBuilder builder, ConcurrentBag<string> warnings);
-        
-        public void VariantToCSharp(StringBuilder builder, ConcurrentBag<string> warnings)
+        public abstract void RenderType(StringBuilder builder, GenerationLogger logger);
+
+        public void RenderVariantToCSharp(StringBuilder builder, GenerationLogger logger)
         {
-            if(this is GodotAnnotatedVariantType { VariantType: Variant.Type.Nil }) return;
+            using var _ = logger.BeginScope(ToString());
+            if (this is GodotAnnotatedVariantType { VariantType: Variant.Type.Nil }) return;
             builder.Append(".As<");
-            Render(builder, warnings);
+            RenderType(builder, logger);
             builder.Append(">()");
         }
 
-        public void CSharpToVariant(string csharpVariableName, StringBuilder builder)
+        public void RenderCSharpToVariant(string csharpVariableName, StringBuilder builder)
         {
             if (this is GodotEnumType)
             {
@@ -431,20 +449,21 @@ public partial class WrapperGeneratorMain
         // TODO: Impl
         public override HashSet<Variant.Type> Accepts { get; } = [];
 
-        public override void Render(StringBuilder builder, ConcurrentBag<string> warnings)
+        public override void RenderType(StringBuilder builder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(ToString());
             // If both types are both GodotClassType, find their common ancestor
             // and render that instead
             if (Types.Length == 1)
             {
-                Types[0].Render(builder, warnings);
+                Types[0].RenderType(builder, logger);
                 return;
             }
 
             var godotClassCandidate = Types.Select(x => x as GodotClassType).ToArray();
             if (godotClassCandidate.All(x => x != null))
             {
-                FindCommonBaseType(godotClassCandidate).Render(builder, warnings);
+                FindCommonBaseType(godotClassCandidate).RenderType(builder, logger);
                 return;
             }
 
@@ -452,7 +471,7 @@ public partial class WrapperGeneratorMain
             if (godotVariantCandidate.All(x => x != null))
             {
                 var type = godotVariantCandidate.Select(x => x.VariantType).Distinct().ToArray();
-                if(type.Length == 1) godotVariantCandidate[0].Render(builder, warnings);
+                if (type.Length == 1) godotVariantCandidate[0].RenderType(builder, logger);
                 else builder.Append("Variant");
                 return;
             }
@@ -478,6 +497,7 @@ public partial class WrapperGeneratorMain
                     typeChain.Add(currentType);
                     currentType = (currentType as GodotClassType)?.ParentType;
                 }
+
                 typeChains.Add(typeChain);
             }
 
@@ -487,7 +507,7 @@ public partial class WrapperGeneratorMain
             {
                 commonBaseTypes.IntersectWith(typeChain);
             }
-        
+
             return commonBaseTypes.OrderByDescending(x => (x as GodotClassType)?.GetInheritanceDepth() ?? 0).FirstOrDefault();
         }
     }
@@ -498,44 +518,44 @@ public partial class WrapperGeneratorMain
         GodotType Type,
         PropertyHint Hint,
         string HintString,
-        PropertyUsageFlags Usage)
+        PropertyUsageFlags Usage
+    )
     {
         public override string ToString() => $"{Type} {CSharpName}";
 
         public void RenderCSharpToVariant(StringBuilder builder)
         {
-            Type.CSharpToVariant(EscapeCSharpKeyWords(CSharpName), builder);
+            Type.RenderCSharpToVariant(EscapeCSharpKeyWords(CSharpName), builder);
         }
-        
-        public void RenderVariantToCSharp(StringBuilder marshallingBuilder, ConcurrentBag<string> warnings)
+
+        public void RenderVariantToCSharp(StringBuilder marshallingBuilder, GenerationLogger logger)
         {
             marshallingBuilder.Append(EscapeCSharpKeyWords(CSharpName));
-            Type.VariantToCSharp(marshallingBuilder, warnings);
+            Type.RenderVariantToCSharp(marshallingBuilder, logger);
         }
 
-        public void RenderName(StringBuilder builder) => 
+        public void RenderName(StringBuilder builder) =>
             builder.Append(EscapeCSharpKeyWords(CSharpName));
 
-        public void RenderTypeArgument(StringBuilder methodTypeArgumentBuilder, ConcurrentBag<string> warnings)
+        public void RenderTypeArgument(StringBuilder methodTypeArgumentBuilder, GenerationLogger logger)
         {
             if (Usage.HasFlag(PropertyUsageFlags.NilIsVariant)) methodTypeArgumentBuilder.Append("Variant");
-            else Type.Render(methodTypeArgumentBuilder, warnings);
+            else Type.RenderType(methodTypeArgumentBuilder, logger);
         }
-        
-        public void Render(StringBuilder methodBuilder, ConcurrentBag<string> warnings)
+
+        public void Render(StringBuilder methodBuilder, GenerationLogger logger)
         {
-            RenderTypeArgument(methodBuilder, warnings);
+            RenderTypeArgument(methodBuilder, logger);
             methodBuilder.Append(' ');
             methodBuilder.Append(EscapeCSharpKeyWords(CSharpName));
         }
     }
-    
+
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9_]*$")]
     private static partial Regex IsValidIdentifierNameRegex();
-    
-    [GeneratedRegex("[^A-Za-z0-9_]")]
-    private static partial Regex ValidIdentifierCharacterRegex();
-    
+
+    [GeneratedRegex("[^A-Za-z0-9_]")] private static partial Regex ValidIdentifierCharacterRegex();
+
     private static readonly HashSet<string> CSharpKeyWords =
     [
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const", "continue",
@@ -562,33 +582,34 @@ public partial class WrapperGeneratorMain
 
         private static readonly HashSet<Variant.Type> RequireExtraDefaultValuePopulationVariantTypes =
         [
-            Variant.Type.Vector2, Variant.Type.Vector2I, Variant.Type.Rect2, Variant.Type.Rect2I, 
-            Variant.Type.Vector3, Variant.Type.Vector3I, Variant.Type.Transform2D, 
-            Variant.Type.Vector4, Variant.Type.Vector4I, 
-            Variant.Type.Plane, Variant.Type.Quaternion, Variant.Type.Aabb, 
-            Variant.Type.Basis, Variant.Type.Transform3D, Variant.Type.Projection, 
-            Variant.Type.Color, Variant.Type.StringName, Variant.Type.NodePath, 
-            Variant.Type.Callable, Variant.Type.Dictionary, Variant.Type.Array, 
-            Variant.Type.PackedByteArray, Variant.Type.PackedInt32Array, Variant.Type.PackedInt64Array, 
-            Variant.Type.PackedFloat32Array, Variant.Type.PackedFloat64Array, Variant.Type.PackedStringArray, 
+            Variant.Type.Vector2, Variant.Type.Vector2I, Variant.Type.Rect2, Variant.Type.Rect2I,
+            Variant.Type.Vector3, Variant.Type.Vector3I, Variant.Type.Transform2D,
+            Variant.Type.Vector4, Variant.Type.Vector4I,
+            Variant.Type.Plane, Variant.Type.Quaternion, Variant.Type.Aabb,
+            Variant.Type.Basis, Variant.Type.Transform3D, Variant.Type.Projection,
+            Variant.Type.Color, Variant.Type.StringName, Variant.Type.NodePath,
+            Variant.Type.Callable, Variant.Type.Dictionary, Variant.Type.Array,
+            Variant.Type.PackedByteArray, Variant.Type.PackedInt32Array, Variant.Type.PackedInt64Array,
+            Variant.Type.PackedFloat32Array, Variant.Type.PackedFloat64Array, Variant.Type.PackedStringArray,
             Variant.Type.PackedVector2Array, Variant.Type.PackedVector3Array, Variant.Type.PackedColorArray, Variant.Type.PackedVector4Array
         ];
 
-        public void RenderCSharpToVariant(StringBuilder methodArgumentBuilder) => 
+        public void RenderCSharpToVariant(StringBuilder methodArgumentBuilder) =>
             Info.RenderCSharpToVariant(methodArgumentBuilder);
 
-        public void RenderVariantToCSharp(StringBuilder methodArgumentBuilder, ConcurrentBag<string> warnings) => 
-            Info.RenderVariantToCSharp(methodArgumentBuilder, warnings);
+        public void RenderVariantToCSharp(StringBuilder methodArgumentBuilder, GenerationLogger logger) =>
+            Info.RenderVariantToCSharp(methodArgumentBuilder, logger);
 
         public void RenderVariant(StringBuilder builder)
         {
             builder.Append("Variant ");
             Info.RenderName(builder);
         }
-        
-        public void Render(StringBuilder methodBuilder, ConcurrentBag<string> warnings)
+
+        public void RenderFunctionArgument(StringBuilder methodBuilder, GenerationLogger logger)
         {
-            Info.Render(methodBuilder, warnings);
+            using var _ = logger.BeginScope();
+            Info.Render(methodBuilder, logger);
             if (!Default.HasValue) return;
             methodBuilder.Append(" = ");
             if (RequireExtraDefaultValuePopulationVariantTypes.Contains(Default.Value.VariantType)
@@ -599,14 +620,14 @@ public partial class WrapperGeneratorMain
                 {
                     if (enumType.DefaultEnumValue is not null)
                     {
-                        enumType.Render(methodBuilder, warnings);
+                        enumType.RenderType(methodBuilder, logger);
                         methodBuilder.Append('.').Append(enumType.DefaultEnumValue);
-                        warnings.Add($"The default value of the enum method argument {Info.GodotName} is not integer ({Default.Value.VariantType}), {enumType.GodotTypeName}.{enumType.DefaultEnumValue} is used instead.");
+                        logger.Add($"The default value of the enum method argument {Info.GodotName} is not integer ({Default.Value.VariantType}), {enumType.GodotTypeName}.{enumType.DefaultEnumValue} is used instead.");
                     }
                     else
                     {
                         methodBuilder.Append("default");
-                        warnings.Add($"The default value of the enum method argument {Info.GodotName} is not integer ({Default.Value.VariantType}), and the enum type {enumType.GodotTypeName} does not have any defined values, default is used instead.");
+                        logger.Add($"The default value of the enum method argument {Info.GodotName} is not integer ({Default.Value.VariantType}), and the enum type {enumType.GodotTypeName} does not have any defined values, default is used instead.");
                     }
                 }
                 else
@@ -615,13 +636,13 @@ public partial class WrapperGeneratorMain
                     var matched = enumType.EnumConstants.FirstOrDefault(x => x.EnumValue == value);
                     if (matched.EnumName is not null)
                     {
-                        enumType.Render(methodBuilder, warnings);
+                        enumType.RenderType(methodBuilder, logger);
                         methodBuilder.Append('.').Append(matched.EnumName);
                     }
                     else
                     {
                         methodBuilder.Append('(');
-                        enumType.Render(methodBuilder, warnings);
+                        enumType.RenderType(methodBuilder, logger);
                         methodBuilder.Append('.').Append(value);
                     }
                 }
@@ -633,12 +654,12 @@ public partial class WrapperGeneratorMain
                     if (Info.Type.Accepts.Contains(Variant.Type.Object))
                     {
                         methodBuilder.Append("null");
-                        warnings.Add($"The default value type {Default.Value.VariantType} cannot be used for the method argument {Info.GodotName} (only accepts [{string.Join(", ", Info.Type.Accepts)}]), null is used instead.");
+                        logger.Add($"The default value type {Default.Value.VariantType} cannot be used for the method argument {Info.GodotName} (only accepts [{string.Join(", ", Info.Type.Accepts)}]), null is used instead.");
                     }
                     else
                     {
                         methodBuilder.Append("default");
-                        warnings.Add($"The default value type {Default.Value.VariantType} cannot be used for the method argument {Info.GodotName} (only accepts [{string.Join(", ", Info.Type.Accepts)}]), default is used instead.");
+                        logger.Add($"The default value type {Default.Value.VariantType} cannot be used for the method argument {Info.GodotName} (only accepts [{string.Join(", ", Info.Type.Accepts)}]), default is used instead.");
                     }
                 }
                 else
@@ -675,25 +696,28 @@ public partial class WrapperGeneratorMain
                 (_, _) => $"{GodotPropertyType} {CSharpPropertyName} {{ get; set; }}",
             };
 
-        public void RenderProperty(StringBuilder propertyBuilder, ConcurrentBag<string> warnings)
+        public void RenderProperty(StringBuilder propertyBuilder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(GodotPropertyName);
             propertyBuilder.Append($"{__}public new ");
             if (GodotPropertyType is GodotAnnotatedVariantType { VariantType: Variant.Type.Nil }) propertyBuilder.Append("Variant");
-            else GodotPropertyType.Render(propertyBuilder, warnings);
+            else GodotPropertyType.RenderType(propertyBuilder, logger);
             propertyBuilder.Append(' ').AppendLine(CSharpPropertyName);
             propertyBuilder.AppendLine($$"""{{__}}{""");
             if (Getter is not null)
             {
                 propertyBuilder.Append($"{__ + __}get => Get(GDExtensionPropertyName.{CSharpPropertyName})");
-                GodotPropertyType.VariantToCSharp(propertyBuilder, warnings);
+                GodotPropertyType.RenderVariantToCSharp(propertyBuilder, logger);
                 propertyBuilder.AppendLine(";");
             }
+
             if (Setter is not null)
             {
                 propertyBuilder.Append($"{__ + __}set => Set(GDExtensionPropertyName.{CSharpPropertyName}, ");
-                GodotPropertyType.CSharpToVariant("value", propertyBuilder);
+                GodotPropertyType.RenderCSharpToVariant("value", propertyBuilder);
                 propertyBuilder.AppendLine(");");
             }
+
             propertyBuilder.AppendLine($$"""{{__}}}""");
         }
     }
@@ -703,26 +727,28 @@ public partial class WrapperGeneratorMain
         CSharpName CSharpFunctionName,
         GodotPropertyInfo ReturnValue,
         long MethodId,
-        MethodFlags Flags)
+        MethodFlags Flags
+    )
     {
         public List<GodotMethodArgument> FunctionArguments { get; } = [];
         public override string ToString() => $"[{Flags}] {ReturnValue.Type} {CSharpFunctionName}({string.Join(", ", FunctionArguments)})";
 
-        public void RenderMethod(StringBuilder methodBuilder, ConcurrentBag<string> warnings)
+        public void RenderMethod(StringBuilder methodBuilder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(GodotFunctionName);
             methodBuilder.Append($"{__}public new ");
             var isStatic = Flags.HasFlag(MethodFlags.Static);
             var isVirtual = Flags.HasFlag(MethodFlags.Virtual);
             if (isStatic) methodBuilder.Append("static ");
             if (isVirtual) methodBuilder.Append("virtual ");
-            ReturnValue.Type.Render(methodBuilder, warnings);
+            ReturnValue.Type.RenderType(methodBuilder, logger);
             methodBuilder.Append(' ').Append(CSharpFunctionName);
-            RenderArguments(methodBuilder, warnings);
+            RenderFunctionArguments(methodBuilder, logger);
             methodBuilder.AppendLine(" => ").Append(__ + __);
             if (isStatic) methodBuilder.Append("ClassDB.ClassCallStatic(NativeName, ");
             else methodBuilder.Append("Call(");
             methodBuilder.Append($"GDExtensionMethodName.{CSharpFunctionName}, [");
-            
+
             var isFirst = true;
             foreach (var methodArgument in FunctionArguments)
             {
@@ -732,35 +758,36 @@ public partial class WrapperGeneratorMain
             }
 
             methodBuilder.Append("])");
-            ReturnValue.Type.VariantToCSharp(methodBuilder, warnings);
+            ReturnValue.Type.RenderVariantToCSharp(methodBuilder, logger);
             methodBuilder.AppendLine(";");
         }
 
-        public void RenderSignal(StringBuilder signalBuilder, ConcurrentBag<string> warnings)
+        public void RenderSignal(StringBuilder signalBuilder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(GodotFunctionName);
             var signalName = $"{CSharpFunctionName}Signal";
             var signalDelegateName = $"{signalName}Handler";
             var signalNameCamelCase = signalName.ToCamelCase();
             var backingDelegateName = $"_{signalNameCamelCase}";
             var backingCallableName = $"_{signalNameCamelCase}Callable";
-            
+
             signalBuilder.Append($"{__}public new delegate ");
-            ReturnValue.Type.Render(signalBuilder, warnings);
+            ReturnValue.Type.RenderType(signalBuilder, logger);
             signalBuilder.Append($" {signalDelegateName}");
-            RenderArguments(signalBuilder, warnings);
+            RenderFunctionArguments(signalBuilder, logger);
             signalBuilder.AppendLine(";");
             signalBuilder.Append(
                 $$"""
-                {{__}}private {{signalDelegateName}} {{backingDelegateName}};
-                {{__}}private Callable {{backingCallableName}};
-                {{__}}public event {{signalDelegateName}} {{signalName}}
-                {{__}}{
-                {{__ + __}}add
-                {{__ + __}}{
-                {{__ + __ + __}}if ({{backingDelegateName}} is null)
-                {{__ + __ + __}}{
-                {{__ + __ + __ + __}}{{backingCallableName}} = Callable.From(
-                """
+                  {{__}}private {{signalDelegateName}} {{backingDelegateName}};
+                  {{__}}private Callable {{backingCallableName}};
+                  {{__}}public event {{signalDelegateName}} {{signalName}}
+                  {{__}}{
+                  {{__ + __}}add
+                  {{__ + __}}{
+                  {{__ + __ + __}}if ({{backingDelegateName}} is null)
+                  {{__ + __ + __}}{
+                  {{__ + __ + __ + __}}{{backingCallableName}} = Callable.From(
+                  """
             );
 
             RenderVariantTypeArgument(signalBuilder);
@@ -774,7 +801,7 @@ public partial class WrapperGeneratorMain
             {
                 if (isFirst) isFirst = false;
                 else signalBuilder.Append(", ");
-                methodArgument.RenderVariantToCSharp(signalBuilder, warnings);
+                methodArgument.RenderVariantToCSharp(signalBuilder, logger);
             }
 
             signalBuilder.AppendLine("));");
@@ -797,15 +824,16 @@ public partial class WrapperGeneratorMain
             );
         }
 
-        private void RenderArguments(StringBuilder builder, ConcurrentBag<string> warnings)
+        private void RenderFunctionArguments(StringBuilder builder, GenerationLogger logger)
         {
+            using var _ = logger.BeginScope(GodotFunctionName);
             builder.Append('(');
             var isFirst = true;
             foreach (var argument in FunctionArguments)
             {
                 if (isFirst) isFirst = false;
                 else builder.Append(", ");
-                argument.Render(builder, warnings);
+                argument.RenderFunctionArgument(builder, logger);
             }
 
             builder.Append(')');
