@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Godot;
 
 namespace GDExtensionAPIGenerator;
@@ -34,7 +33,7 @@ public partial class WrapperGeneratorMain : EditorPlugin
         _vbox.Free();
     }
 
-    private static void DoGenerate()
+    private void DoGenerate()
     {
         var warnings = new ConcurrentBag<string>();
         TypeCollector.CreateClassDiagram(out var gdExtensionTypes, warnings);
@@ -47,17 +46,18 @@ public partial class WrapperGeneratorMain : EditorPlugin
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         Directory.CreateDirectory(outputDir!);
         files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
-        
-        
-        files.Clear();
-        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteTypeUnitTest(type, files));
 
-        outputDir = ProjectSettings.GlobalizePath("res://GDExtensionWrappers.Tests");
-        if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
-        Directory.CreateDirectory(outputDir!);
-        files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
 
-        
+        if (_includeTestsCheckBox.ButtonPressed)
+        {
+            files.Clear();
+            gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteTypeUnitTest(type, files));
+            outputDir = ProjectSettings.GlobalizePath("res://GDExtensionWrappers.Tests");
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            Directory.CreateDirectory(outputDir!);
+            files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
+        }
+
         var warningArray = warnings.ToHashSet().Order().ToArray();
         if(warningArray.Length == 0) return;
         GD.PrintErr($"({warningArray.Length}) warning(s) during rendering the GDExtension wrapper classes:");
