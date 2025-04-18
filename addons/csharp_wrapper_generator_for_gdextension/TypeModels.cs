@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -7,8 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Godot;
-using GodotName = string;
-using CSharpName = string;
 
 namespace GDExtensionAPIGenerator;
 
@@ -87,7 +84,7 @@ public partial class WrapperGeneratorMain
 
             var parentTypeName = ParentType switch
             {
-                GodotClassType parentClassType => parentClassType.CSharpTypeName,
+                GodotClassType parentClassType => parentClassType.CSharpTypeName.String,
                 GodotAnnotatedVariantType { VariantType: Variant.Type.Object } => nameof(GodotObject),
                 _ => throw new UnreachableException()
             };
@@ -272,8 +269,9 @@ public partial class WrapperGeneratorMain
         {
             using var _ = logger.BeginScope(ToString());
             BackedType.RenderType(builder, logger);
-            builder.Append($"/* {EnumDefine} */");
-            logger.Add($"Using an unregistered enum type {EnumDefine}.");
+            var enumDefineString = string.IsNullOrWhiteSpace(EnumDefine) ? "Empty Enum Constant String" : EnumDefine;
+            builder.Append($"/* \"{enumDefineString}\" */");
+            logger.Add($"Using an unregistered enum type \"{enumDefineString}\".");
         }
 
         public override string ToString() => $"UnDefEnum<{BackedType}/*{EnumDefine}*/>";
@@ -440,48 +438,52 @@ public partial class WrapperGeneratorMain
 
     private record GodotMultiType : GodotType
     {
-        public GodotMultiType(GodotType[] Types)
+        public GodotMultiType(GodotType[] types, GodotVariantType variantType)
         {
-            if (Types.Length == 0) throw new ArgumentException("Types cannot be empty", nameof(Types));
-            this.Types = Types;
-        }
-
-        // TODO: Impl
-        public override HashSet<Variant.Type> Accepts { get; } = [];
-
-        public override void RenderType(StringBuilder builder, GenerationLogger logger)
-        {
-            using var _ = logger.BeginScope(ToString());
+            if (types.Length == 0) throw new ArgumentException("Types cannot be empty", nameof(types));
+            Types = types;
+            
             // If both types are both GodotClassType, find their common ancestor
             // and render that instead
-            if (Types.Length == 1)
+            if (types.Length == 1)
             {
-                Types[0].RenderType(builder, logger);
+                CommonBaseType = types[0];
                 return;
             }
 
-            var godotClassCandidate = Types.Select(x => x as GodotClassType).ToArray();
+            var godotClassCandidate = types.Select(x => x as GodotClassType).ToArray();
             if (godotClassCandidate.All(x => x != null))
             {
-                FindCommonBaseType(godotClassCandidate).RenderType(builder, logger);
+                CommonBaseType = FindCommonBaseType(godotClassCandidate);
+                Accepts = [Variant.Type.Object];
                 return;
             }
 
-            var godotVariantCandidate = Types.Select(x => x as GodotAnnotatedVariantType).ToArray();
+            var godotVariantCandidate = types.Select(x => x as GodotAnnotatedVariantType).ToArray();
             if (godotVariantCandidate.All(x => x != null))
             {
                 var type = godotVariantCandidate.Select(x => x.VariantType).Distinct().ToArray();
-                if (type.Length == 1) godotVariantCandidate[0].RenderType(builder, logger);
-                else builder.Append("Variant");
-                return;
+                if (type.Length == 1)
+                {
+                    CommonBaseType = godotVariantCandidate[0];
+                    Accepts = [godotVariantCandidate[0].VariantType];
+                    return;
+                }
             }
 
-            builder.Append("Variant");
+            CommonBaseType = variantType;
+            Accepts = [];
         }
 
-        public override string ToString() => $"<{string.Join<GodotType>(", ", Types)}>";
-        public GodotType[] Types { get; init; }
+        public override HashSet<Variant.Type> Accepts { get; }
 
+        public override void RenderType(StringBuilder builder, GenerationLogger logger) => 
+            CommonBaseType.RenderType(builder, logger);
+
+        public override string ToString() => $"<{string.Join<GodotType>(", ", Types)}>";
+        public GodotType[] Types { get; }
+        public GodotType CommonBaseType { get; }
+        
         private static GodotType FindCommonBaseType(GodotClassType[] types)
         {
             if (types.Length == 0) return null;
@@ -513,8 +515,8 @@ public partial class WrapperGeneratorMain
     }
 
     private record GodotPropertyInfo(
-        string GodotName,
-        string CSharpName,
+        GodotName GodotName,
+        CSharpName CSharpName,
         GodotType Type,
         PropertyHint Hint,
         string HintString,
@@ -862,6 +864,7 @@ public partial class WrapperGeneratorMain
         public Dictionary<GodotType, GodotAnnotatedArrayType> PreregisteredArrayTypes { get; } = [];
         public Dictionary<(GodotType, GodotType), GodotAnnotatedDictionaryType> PreregisteredDictionaryTypes { get; } = [];
         public Dictionary<GodotNamedType, Dictionary<GodotName, GodotEnumType>> PreregisteredEnumTypes { get; } = [];
+        public Dictionary<NormalizedEnumConstantsString, Dictionary<GodotType, Dictionary<EnumName, GodotEnumType>>> PreregisteredEnumTypesByName { get; } = [];
         public Dictionary<GodotName, GodotEnumType> GlobalScopeEnumTypes { get; } = [];
 
         public bool TryGetVariantType(Variant.Type variantTypeEnum, out GodotAnnotatedVariantType variantType)

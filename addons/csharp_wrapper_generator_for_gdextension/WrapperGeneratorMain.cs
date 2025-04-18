@@ -36,9 +36,9 @@ public partial class WrapperGeneratorMain : EditorPlugin
 
     private static void DoGenerate()
     {
-        TypeCollector.CreateClassDiagram(out var gdExtensionTypes);
-        var files = new ConcurrentBag<WrapperFile>();
         var warnings = new ConcurrentBag<string>();
+        TypeCollector.CreateClassDiagram(out var gdExtensionTypes, warnings);
+        var files = new ConcurrentBag<WrapperFile>();
         gdExtensionTypes
             .AsParallel()
             .ForAll(type => TypeWriter.WriteType(type, files, warnings));

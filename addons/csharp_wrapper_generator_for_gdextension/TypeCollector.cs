@@ -7,22 +7,48 @@
 // ReSharper disable SuggestVarOrType_Elsewhere
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Godot;
-using GodotName = string;
-using CSharpName = string;
 using GodotDictionary = Godot.Collections.Dictionary;
 
 namespace GDExtensionAPIGenerator;
 
 public partial class WrapperGeneratorMain
 {
+    private record struct GodotName(string String)
+    {
+        public override string ToString() => String;
+        public static implicit operator string(GodotName godotName) => godotName.String;
+        public static implicit operator GodotName(string godotName) => new(godotName);
+    }
+
+    private record struct CSharpName(string String)
+    {
+        public override string ToString() => String;
+        public static implicit operator string(CSharpName csharpName) => csharpName.String;
+        public static implicit operator CSharpName(string csharpName) => new(csharpName);
+    }
+
+    private record struct NormalizedEnumConstantsString(string String)
+    {
+        public override string ToString() => String;
+        public static implicit operator string(NormalizedEnumConstantsString normalizedEnumConstantsString) => normalizedEnumConstantsString.String;
+        public static implicit operator NormalizedEnumConstantsString(string normalizedEnumConstantsString) => new(normalizedEnumConstantsString);
+    }
+
+    private record struct EnumName(string String)
+    {
+        public override string ToString() => String;
+        public static implicit operator string(EnumName enumName) => enumName.String;
+        public static implicit operator EnumName(string enumName) => new(enumName);
+    }
+
     private static partial class TypeCollector
     {
-
-        public static void CreateClassDiagram(out GodotClassType[] gdExtensionTypes)
+        public static void CreateClassDiagram(out GodotClassType[] gdExtensionTypes, ConcurrentBag<string> warnings)
         {
             var constructedTypes = new GodotTypeMap();
 
@@ -30,7 +56,7 @@ public partial class WrapperGeneratorMain
             PopulateGodotClassTypes(constructedTypes);
 
             PopulateGlobalScopeEnumTypes(constructedTypes);
-            PopulateGodotClassMembers(constructedTypes);
+            PopulateGodotClassMembers(constructedTypes, warnings);
 
             gdExtensionTypes = constructedTypes.Types.Values
                 .OfType<GodotClassType>()
@@ -44,36 +70,36 @@ public partial class WrapperGeneratorMain
                 .GetTypes()
                 .Select(x => (Attribute: x.GetCustomAttributesData().FirstOrDefault(y => y.AttributeType == typeof(GodotClassNameAttribute)), Type: x))
                 .Where(x => x.Attribute != null)
-                .Select(x => (GodotTypeName: x.Attribute.ConstructorArguments[0].Value!.ToString(), CSharpTypeName: x.Type.Name))
+                .Select(x => (GodotTypeName: (GodotName)x.Attribute.ConstructorArguments[0].Value!.ToString(), CSharpTypeName: (CSharpName)x.Type.Name))
                 .GroupBy(x => x.GodotTypeName)
                 .ToDictionary(
                     x => x.Key,
                     x =>
                         x.Count() > 1
-                            ? x.First(y => !y.CSharpTypeName.Contains("Instance")).CSharpTypeName
+                            ? x.First(y => !y.CSharpTypeName.String.Contains("Instance")).CSharpTypeName
                             : x.First().CSharpTypeName
                 );
 
 
             foreach (GodotName godotClassName in ClassDB.GetClassList().AsSpan())
             {
-                CSharpName csharpTypeName = godotTypeNameToCSharpTypeNameMap.GetValueOrDefault(godotClassName, godotClassName);
+                CSharpName csharpTypeName = godotTypeNameToCSharpTypeNameMap.GetValueOrDefault(godotClassName, godotClassName.String);
                 if (godotClassName == "Object") continue;
                 godotTypeMap.Types.Add(
                     godotClassName,
                     new GodotClassType(
                         godotClassName,
                         csharpTypeName,
-                        ClassDB.ClassGetApiType(godotClassName),
-                        ClassDB.CanInstantiate(godotClassName)
+                        ClassDB.ClassGetApiType(godotClassName.String),
+                        ClassDB.CanInstantiate(godotClassName.String)
                     )
                 );
             }
 
             foreach (var godotType in godotTypeMap.Types.Values.OfType<GodotClassType>())
             {
-                var parentClass = ClassDB.GetParentClass(godotType.GodotTypeName);
-                godotType.ParentType = godotTypeMap.Types[parentClass];
+                var parentClass = ClassDB.GetParentClass(godotType.GodotTypeName.String);
+                godotType.ParentType = godotTypeMap.Types[new(parentClass)];
             }
         }
 
@@ -154,21 +180,22 @@ public partial class WrapperGeneratorMain
             }
         }
 
-        private static void PopulateGodotClassMembers(GodotTypeMap godotTypeMap)
+        private static void PopulateGodotClassMembers(GodotTypeMap godotTypeMap, ConcurrentBag<string> warnings)
         {
             foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Core, ClassDB.ApiType.Editor, ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
             {
-                var enumNames = ClassDB.ClassGetEnumList(godotClassType.GodotTypeName, true);
+                var logger = new GenerationLogger(godotClassType);
+                var enumNames = ClassDB.ClassGetEnumList(godotClassType.GodotTypeName.String, true);
                 foreach (var enumName in enumNames)
                 {
-                    var enumType = new GodotEnumType(enumName, enumName.ToPascalCase(), godotClassType, ClassDB.IsClassEnumBitfield(godotClassType.GodotTypeName, enumName, true));
+                    var enumType = new GodotEnumType(enumName, enumName.ToPascalCase(), godotClassType, ClassDB.IsClassEnumBitfield(godotClassType.GodotTypeName.String, enumName, true));
                     var isFirst = true;
-                    foreach (var enumConstant in ClassDB.ClassGetEnumConstants(godotClassType.GodotTypeName, enumName, true))
+                    foreach (var enumConstant in ClassDB.ClassGetEnumConstants(godotClassType.GodotTypeName.String, enumName, true))
                     {
-                        var enumValue = ClassDB.ClassGetIntegerConstant(godotClassType.GodotTypeName, enumConstant);
+                        var enumValue = ClassDB.ClassGetIntegerConstant(godotClassType.GodotTypeName.String, enumConstant);
                         var enumConstantName = GodotEnumType.FormatEnumName(enumName, enumConstant);
                         enumType.EnumConstants.Add((enumConstantName, enumValue));
-                        
+
                         if (isFirst)
                         {
                             isFirst = false;
@@ -184,29 +211,49 @@ public partial class WrapperGeneratorMain
                     }
 
                     preregisteredEnums.Add(enumName, enumType);
+
+                    var normalizedString = NormalizeString(enumType.EnumConstants.Select(x => x.EnumName));
+
+                    if (!godotTypeMap.PreregisteredEnumTypesByName.TryGetValue(normalizedString, out var selections))
+                    {
+                        selections = [];
+                        godotTypeMap.PreregisteredEnumTypesByName.Add(normalizedString, selections);
+                    }
+
+                    if (!selections.TryGetValue(godotClassType, out var enumTypes))
+                    {
+                        enumTypes = [];
+                        selections.Add(godotClassType, enumTypes);
+                    }
+
+                    enumTypes.Add(enumName, enumType);
                 }
+                if (logger.TryGetMessages(out var message)) warnings.Add(message);
             }
 
-            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
+            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension))
             {
-                var methodDefinitions = ClassDB.ClassGetMethodList(godotClassType.GodotTypeName, true);
+                var logger = new GenerationLogger(godotClassType);
+                var methodDefinitions = ClassDB.ClassGetMethodList(godotClassType.GodotTypeName.String, true);
                 foreach (var methodDefinition in methodDefinitions)
                 {
-                    var methodInfo = CreateFunctionInfo(godotTypeMap, methodDefinition);
+                    var methodInfo = CreateFunctionInfo(godotTypeMap, methodDefinition, logger);
                     godotClassType.Methods.Add(methodInfo);
                 }
+                if (logger.TryGetMessages(out var message)) warnings.Add(message);
             }
 
-            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
+            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension))
             {
-                var propertyDefinitions = ClassDB.ClassGetPropertyList(godotClassType.GodotTypeName, true);
+                var logger = new GenerationLogger(godotClassType);
+                var propertyDefinitions = ClassDB.ClassGetPropertyList(godotClassType.GodotTypeName.String, true);
                 foreach (var propertyDefinition in propertyDefinitions)
                 {
-                    var propertyInfo = CreatePropertyInfo(propertyDefinition, godotTypeMap);
-                    var csharpPropertyName = propertyInfo.GodotName.ToPascalCase();
-                    if(propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)) continue;
-                    var getter = ClassDB.ClassGetPropertyGetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
-                    var setter = ClassDB.ClassGetPropertySetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
+                    var propertyInfo = CreatePropertyInfo(propertyDefinition, godotTypeMap, logger);
+                    var csharpPropertyName = propertyInfo.GodotName.String.ToPascalCase();
+                    if (propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)) continue;
+                    var getter = ClassDB.ClassGetPropertyGetter(godotClassType.GodotTypeName.String, propertyInfo.GodotName.String);
+                    var setter = ClassDB.ClassGetPropertySetter(godotClassType.GodotTypeName.String, propertyInfo.GodotName.String);
                     var getterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == getter);
                     var setterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == setter);
                     godotClassType.Properties.Add(
@@ -222,23 +269,27 @@ public partial class WrapperGeneratorMain
 
                 foreach (var propertyInfo in godotClassType.Properties)
                 {
-                    if(propertyInfo.Getter is not null) godotClassType.Methods.Remove(propertyInfo.Getter);
-                    if(propertyInfo.Setter is not null) godotClassType.Methods.Remove(propertyInfo.Setter);
+                    if (propertyInfo.Getter is not null) godotClassType.Methods.Remove(propertyInfo.Getter);
+                    if (propertyInfo.Setter is not null) godotClassType.Methods.Remove(propertyInfo.Setter);
                 }
+                if (logger.TryGetMessages(out var message)) warnings.Add(message);
             }
 
-            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
+            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension))
             {
-                var signalDefinitions = ClassDB.ClassGetSignalList(godotClassType.GodotTypeName, true);
+                var logger = new GenerationLogger(godotClassType);
+                var signalDefinitions = ClassDB.ClassGetSignalList(godotClassType.GodotTypeName.String, true);
                 foreach (var signalDefinition in signalDefinitions)
                 {
-                    var signalInfo = CreateFunctionInfo(godotTypeMap, signalDefinition);
+                    var signalInfo = CreateFunctionInfo(godotTypeMap, signalDefinition, logger);
                     godotClassType.Signals.Add(signalInfo);
                 }
+                if (logger.TryGetMessages(out var message)) warnings.Add(message);
             }
-            
-            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
+
+            foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension))
             {
+                var logger = new GenerationLogger(godotClassType);
                 foreach (var enumType in godotClassType.Enums)
                 {
                     if (godotClassType.Methods.All(x => x.CSharpFunctionName != enumType.CSharpTypeName)
@@ -246,15 +297,19 @@ public partial class WrapperGeneratorMain
                         && godotClassType.Signals.All(x => x.CSharpFunctionName != enumType.CSharpTypeName)) continue;
                     enumType.UseAlias = true;
                 }
+                if (logger.TryGetMessages(out var message)) warnings.Add(message);
             }
         }
 
-        private static GodotFunctionInfo CreateFunctionInfo(GodotTypeMap godotTypeMap, GodotDictionary methodDefinition)
+        private static GodotFunctionInfo CreateFunctionInfo(GodotTypeMap godotTypeMap, GodotDictionary methodDefinition, GenerationLogger logger)
         {
             var methodName = methodDefinition["name"].AsString();
             var flags = (MethodFlags)methodDefinition["flags"].AsInt64();
             var id = methodDefinition["id"].AsInt64();
-            var returnValue = CreatePropertyInfo(methodDefinition["return"].AsGodotDictionary(), godotTypeMap);
+
+            using var _ = logger.BeginScope(methodName);
+
+            var returnValue = CreatePropertyInfo(methodDefinition["return"].AsGodotDictionary(), godotTypeMap, logger);
 
             var methodInfo = new GodotFunctionInfo(
                 methodName,
@@ -274,7 +329,7 @@ public partial class WrapperGeneratorMain
             for (var index = 0; index < argsLength; index++)
             {
                 var methodArgumentInfo = args[index];
-                var argument = CreatePropertyInfo(methodArgumentInfo, godotTypeMap);
+                var argument = CreatePropertyInfo(methodArgumentInfo, godotTypeMap, logger);
                 if (index >= defaultArgsStartIndex)
                 {
                     var defaultValue = defaultArgs[index - defaultArgsStartIndex];
@@ -290,35 +345,91 @@ public partial class WrapperGeneratorMain
         }
 
 
-        private static GodotPropertyInfo CreatePropertyInfo(GodotDictionary propertyInfo, GodotTypeMap godotTypeMap)
+        private static GodotPropertyInfo CreatePropertyInfo(GodotDictionary propertyInfo, GodotTypeMap godotTypeMap, GenerationLogger logger)
         {
             var name = propertyInfo["name"].AsString();
+            using var _ = logger.BeginScope(name);
             var className = propertyInfo["class_name"].AsString();
             var type = (Variant.Type)propertyInfo["type"].AsInt64();
             var hint = (PropertyHint)propertyInfo["hint"].AsInt64();
             var hintString = propertyInfo["hint_string"].AsString();
             var usage = (PropertyUsageFlags)propertyInfo["usage"].AsInt64();
 
-            var propertyType = GetGodotTypeByPropertyDefinition(godotTypeMap, usage, className, type, hint, hintString);
+            var propertyType = GetGodotTypeByPropertyDefinition(godotTypeMap, usage, className, type, hint, hintString, name, logger);
 
             return new(name, name.ToCamelCase(), propertyType, hint, hintString, usage);
         }
 
-        private static GodotType GetGodotTypeByPropertyDefinition(GodotTypeMap godotTypeMap, PropertyUsageFlags usage, string className, Variant.Type type, PropertyHint hint, string hintString)
+        private static NormalizedEnumConstantsString NormalizeString(IEnumerable<string> sourceString) => string.Join(',', sourceString.Select(x => x.ToSnakeCase().ToUpperInvariant()).OrderBy(x => x));
+
+        private static GodotType GetGodotTypeByPropertyDefinition(GodotTypeMap godotTypeMap, PropertyUsageFlags usage, string className, Variant.Type type, PropertyHint hint, string hintString, string propertyName, GenerationLogger logger)
         {
             GodotType propertyType = godotTypeMap.Variant;
 
             if (hint is PropertyHint.Enum || usage.HasFlag(PropertyUsageFlags.ClassIsEnum))
             {
                 var splits = className.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                GodotNamedType matchedEnumOwnerType = null;
                 if (splits.Length == 2
-                    && godotTypeMap.Types.TryGetValue(splits[0], out var matchedEnumOwnerType)
-                    && godotTypeMap.PreregisteredEnumTypes.TryGetValue(matchedEnumOwnerType, out var preregisteredEnums)
+                    && godotTypeMap.Types.TryGetValue(splits[0], out matchedEnumOwnerType)
+                    && godotTypeMap.PreregisteredEnumTypes.TryGetValue(matchedEnumOwnerType, out Dictionary<GodotName, GodotEnumType> preregisteredEnums)
                     && preregisteredEnums.TryGetValue(splits[1], out var matchedEnumType)) propertyType = matchedEnumType;
                 else if (godotTypeMap.GlobalScopeEnumTypes.TryGetValue(className, out var matchedGlobalScopeEnumType))
                     propertyType = matchedGlobalScopeEnumType;
                 else if (godotTypeMap.TryGetVariantType(type, out var variantTypeAsEnumFallback))
-                    propertyType = new UserUndefinedEnumType(hintString, variantTypeAsEnumFallback);
+                {
+                    if (hintString.Contains(','))
+                    {
+                        var normalizedString = NormalizeString(hintString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                        if (godotTypeMap.PreregisteredEnumTypesByName.TryGetValue(normalizedString, out Dictionary<GodotType, Dictionary<EnumName, GodotEnumType>> candidates))
+                        {
+                            if (matchedEnumOwnerType != null)
+                            {
+                                if (candidates.TryGetValue(matchedEnumOwnerType, out Dictionary<EnumName, GodotEnumType> matchedEnumOwnerTypeCandidates))
+                                {
+                                    if (matchedEnumOwnerTypeCandidates.Count == 1)
+                                    {
+                                        propertyType = matchedEnumOwnerTypeCandidates.First().Value;
+                                    }
+                                    else
+                                    {
+                                        logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions under the GodotType {matchedEnumOwnerType}: \n{string.Join("\n", matchedEnumOwnerTypeCandidates.Keys.Select(x => __ + __ + __ + x.String))}");
+                                        propertyType = variantTypeAsEnumFallback;
+                                    }
+                                }
+                                else
+                                {
+                                    logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to the declared enum type {matchedEnumOwnerType}, the supplied constant definition set have following enum types candidates: \n{string.Join(", ", candidates.Keys.Select(x => __ + __ + __ + x))}");
+                                    propertyType = variantTypeAsEnumFallback;
+                                }
+                            }
+                            else
+                            {
+                                if (candidates.Count == 1)
+                                {
+                                    var candidate = candidates.First();
+                                    if (candidate.Value.Count == 1)
+                                        propertyType = candidate.Value.First().Value;
+                                    else
+                                    {
+                                        logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions under type {candidate.Key}: \n{string.Join("\n", candidate.Value.Keys.Select(x => __ + __ + __ + x.String))}");
+                                        propertyType = variantTypeAsEnumFallback;
+                                    }
+                                }
+                                else
+                                {
+                                    logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions: \n{string.Join("\n", candidates.SelectMany(type => type.Value.Select(enumName => $"{__ + __ + __ + type.Key}.{enumName.Key.String}")))}");
+                                    propertyType = variantTypeAsEnumFallback;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        logger.Add($"Using an enum constant definition set for property {propertyName} (\"{usage}\", \"{(string.IsNullOrEmpty(className) ? "Empty ClassName" : className)}\", \"{type}\", \"{hint}\", \"{(string.IsNullOrEmpty(hintString) ? "Empty Hint String" : hintString)}\").");
+                        propertyType = new UserUndefinedEnumType(hintString, variantTypeAsEnumFallback);
+                    }
+                }
             }
             else if (type != Variant.Type.Object && godotTypeMap.TryGetVariantType(type, out var variantType))
             {
@@ -347,7 +458,7 @@ public partial class WrapperGeneratorMain
                         }
                     }
 
-                    if (pass) propertyType = new GodotMultiType(candidateArray);
+                    if (pass) propertyType = new GodotMultiType(candidateArray, godotTypeMap.Variant);
                     else propertyType = godotTypeMap.Variant;
                 }
             }
@@ -355,8 +466,7 @@ public partial class WrapperGeneratorMain
             {
                 propertyType = godotTypeMap.Variant;
             }
-            else if (type == Variant.Type.Array
-                     && hint == PropertyHint.ArrayType)
+            else if (type == Variant.Type.Array && hint == PropertyHint.ArrayType)
             {
                 if (godotTypeMap.Types.TryGetValue(hintString, out var matchedArrayElementType))
                 {
@@ -378,7 +488,7 @@ public partial class WrapperGeneratorMain
                     var arrayVariantType = (Variant.Type)arrayVariantTypeValue;
                     var arrayVariantHint = (PropertyHint)arrayVariantHintValue;
 
-                    var elementType = GetGodotTypeByPropertyDefinition(godotTypeMap, PropertyUsageFlags.None, string.Empty, arrayVariantType, arrayVariantHint, arrayHintString);
+                    var elementType = GetGodotTypeByPropertyDefinition(godotTypeMap, PropertyUsageFlags.None, string.Empty, arrayVariantType, arrayVariantHint, arrayHintString, propertyName, logger);
 
                     if (!godotTypeMap.PreregisteredArrayTypes.TryGetValue(elementType, out var arrayType))
                     {
@@ -406,8 +516,8 @@ public partial class WrapperGeneratorMain
                     var valueVariantType = (Variant.Type)valueVariantTypeValue;
                     var valueVariantHint = (PropertyHint)valueVariantHintValue;
 
-                    var keyType = GetGodotTypeByPropertyDefinition(godotTypeMap, PropertyUsageFlags.None, string.Empty, keyVariantType, keyVariantHint, keyHintString);
-                    var valueType = GetGodotTypeByPropertyDefinition(godotTypeMap, PropertyUsageFlags.None, string.Empty, valueVariantType, valueVariantHint, valueHintString);
+                    var keyType = GetGodotTypeByPropertyDefinition(godotTypeMap, PropertyUsageFlags.None, string.Empty, keyVariantType, keyVariantHint, keyHintString, propertyName, logger);
+                    var valueType = GetGodotTypeByPropertyDefinition(godotTypeMap, PropertyUsageFlags.None, string.Empty, valueVariantType, valueVariantHint, valueHintString, propertyName, logger);
 
                     if (!godotTypeMap.PreregisteredDictionaryTypes.TryGetValue((keyType, valueType), out var dictionaryType))
                     {
