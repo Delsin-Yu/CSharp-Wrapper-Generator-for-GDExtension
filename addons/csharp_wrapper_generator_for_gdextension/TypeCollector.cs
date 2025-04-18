@@ -18,28 +18,28 @@ namespace GDExtensionAPIGenerator;
 
 public partial class WrapperGeneratorMain
 {
-    private record struct GodotName(string String)
+    private readonly record struct GodotName(string String)
     {
         public override string ToString() => String;
         public static implicit operator string(GodotName godotName) => godotName.String;
         public static implicit operator GodotName(string godotName) => new(godotName);
     }
 
-    private record struct CSharpName(string String)
+    private readonly record struct CSharpName(string String)
     {
         public override string ToString() => String;
         public static implicit operator string(CSharpName csharpName) => csharpName.String;
         public static implicit operator CSharpName(string csharpName) => new(csharpName);
     }
 
-    private record struct NormalizedEnumConstantsString(string String)
+    private readonly record struct NormalizedEnumConstantsString(string String)
     {
         public override string ToString() => String;
         public static implicit operator string(NormalizedEnumConstantsString normalizedEnumConstantsString) => normalizedEnumConstantsString.String;
         public static implicit operator NormalizedEnumConstantsString(string normalizedEnumConstantsString) => new(normalizedEnumConstantsString);
     }
 
-    private record struct EnumName(string String)
+    private readonly record struct EnumName(string String)
     {
         public override string ToString() => String;
         public static implicit operator string(EnumName enumName) => enumName.String;
@@ -60,7 +60,7 @@ public partial class WrapperGeneratorMain
 
             gdExtensionTypes = constructedTypes.Types.Values
                 .OfType<GodotClassType>()
-                .Where(x => x.ApiType is ClassDB.ApiType.Extension or ClassDB.ApiType.EditorExtension)
+                .Where(x => x.ApiType is ClassDB.ApiType.Extension)
                 .ToArray();
         }
 

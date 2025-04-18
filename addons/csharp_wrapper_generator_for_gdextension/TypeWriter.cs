@@ -9,7 +9,7 @@ namespace GDExtensionAPIGenerator;
 
 public partial class WrapperGeneratorMain
 {
-    public record WrapperFile(string FileName, string SourceCode);
+    public record FileConstruction(string FileName, string SourceCode);
 
     private class GenerationLogger(GodotClassType type)
     {
@@ -62,7 +62,7 @@ public partial class WrapperGeneratorMain
     
     private static class TypeWriter
     {
-        public static void WriteType(GodotClassType type, ConcurrentBag<WrapperFile> files, ConcurrentBag<string> warnings)
+        public static void WriteType(GodotClassType type, ConcurrentBag<FileConstruction> files, ConcurrentBag<string> warnings)
         {
             var fileBuilder = new StringBuilder();
 
@@ -70,11 +70,21 @@ public partial class WrapperGeneratorMain
             type.RenderClass(fileBuilder, logger);
 
             var code = fileBuilder.ToString();
-            files.Add(new($"{type.CSharpTypeName}.wrapper.cs", code));
+            files.Add(new($"{type.CSharpTypeName}.cs", code));
 
             if (!logger.TryGetMessages(out var message)) return;
             
             warnings.Add(message);
+        }
+
+        public static void WriteTypeUnitTest(GodotClassType type, ConcurrentBag<FileConstruction> files)
+        {
+            if(!type.CanInstantiate) return;
+            
+            var fileBuilder = new StringBuilder();
+            type.RenderClassTest(fileBuilder);
+            var code = fileBuilder.ToString();
+            files.Add(new($"{type.CSharpTypeName}.unittest.cs", code));
         }
     }
 }

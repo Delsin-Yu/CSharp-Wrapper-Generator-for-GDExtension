@@ -38,14 +38,26 @@ public partial class WrapperGeneratorMain : EditorPlugin
     {
         var warnings = new ConcurrentBag<string>();
         TypeCollector.CreateClassDiagram(out var gdExtensionTypes, warnings);
-        var files = new ConcurrentBag<WrapperFile>();
-        gdExtensionTypes
-            .AsParallel()
-            .ForAll(type => TypeWriter.WriteType(type, files, warnings));
+        
+        
+        var files = new ConcurrentBag<FileConstruction>();
+        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, files, warnings));
+        
         var outputDir = ProjectSettings.GlobalizePath("res://GDExtensionWrappers");
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         Directory.CreateDirectory(outputDir!);
         files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
+        
+        
+        files.Clear();
+        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteTypeUnitTest(type, files));
+
+        outputDir = ProjectSettings.GlobalizePath("res://GDExtensionWrappers.Tests");
+        if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+        Directory.CreateDirectory(outputDir!);
+        files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
+
+        
         var warningArray = warnings.ToHashSet().Order().ToArray();
         if(warningArray.Length == 0) return;
         GD.PrintErr($"({warningArray.Length}) warning(s) during rendering the GDExtension wrapper classes:");

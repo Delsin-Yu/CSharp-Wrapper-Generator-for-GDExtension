@@ -227,6 +227,143 @@ public partial class WrapperGeneratorMain
                   """
             );
         }
+
+        public void RenderClassTest(StringBuilder testClassBuilder)
+        {
+            var testTypeName = $"{CSharpTypeName}_Test";
+
+            testClassBuilder.Append(
+                $$"""
+                using {{Namespace}};
+                using GdUnit4;
+                
+                namespace GDExtensionAPIGenerator.Tests;
+                
+                [TestSuite]
+                public class {{testTypeName}}
+                {
+                
+                """
+            );
+
+            testClassBuilder.Append(
+                $$"""
+                  {{__}}[TestCase]
+                  {{__}}public void {{CSharpTypeName}}_Construction()
+                  {{__}}{
+                  {{__ + __}}var instance = {{Namespace}}.{{CSharpTypeName}}.{{WrapperConstructorName}}();
+                  {{__ + __}}instance.Free();
+                  {{__}}}
+                  
+                  """
+            );
+
+            foreach (var property in Properties)
+            {
+                testClassBuilder.Append(
+                    $$"""
+                      {{__}}[TestCase]
+                      {{__}}public void {{CSharpTypeName}}_Property_{{property.CSharpPropertyName}}()
+                      {{__}}{
+                      {{__ + __}}var instance = {{Namespace}}.{{CSharpTypeName}}.{{WrapperConstructorName}}();
+                      
+                      """
+                );
+
+                if (property.Getter is not null && property.Setter is not null)
+                {
+                    testClassBuilder.Append(
+                        $$"""
+                        {{__ + __}}var value = instance.{{property.CSharpPropertyName}};
+                        {{__ + __}}instance.{{property.CSharpPropertyName}} = value;
+                        
+                        """
+                    );
+                }
+                else if (property.Getter is not null)
+                {
+                    testClassBuilder.Append(
+                        $$"""
+                        {{__ + __}}var value = instance.{{property.CSharpPropertyName}};
+                        
+                        """
+                    );
+                }
+                else if (property.Setter is not null)
+                {
+                    testClassBuilder.Append(
+                        $$"""
+                        {{__ + __}}instance.{{property.CSharpPropertyName}} = default;
+                        
+                        """
+                    );
+                }
+                testClassBuilder.Append(
+                    $$"""
+                      {{__ + __}}instance.Free();
+                      {{__}}}
+                      
+                      """
+                );
+            }
+
+            foreach (var method in Methods)
+            {
+                testClassBuilder.Append(
+                    $$"""
+                      {{__}}[TestCase]
+                      {{__}}public void {{CSharpTypeName}}_Method_{{method.CSharpFunctionName}}()
+                      {{__}}{
+                      
+                      """
+                );
+
+                if (method.Flags.HasFlag(MethodFlags.Static))
+                {
+                    testClassBuilder.Append(
+                        $"{__ + __}{CSharpTypeName}.{method.CSharpFunctionName}("
+                    );
+                }
+                else
+                {
+                    testClassBuilder.Append(
+                        $"""
+                          {__ + __}var instance = {Namespace}.{CSharpTypeName}.{WrapperConstructorName}();
+                          {__ + __}instance.{method.CSharpFunctionName}(
+                          """
+                    );
+                }
+
+                var isFirst = true;
+                foreach (var argument in method.FunctionArguments)
+                {
+                    if (isFirst) isFirst = false;
+                    else testClassBuilder.Append(", ");
+                    testClassBuilder.Append("default");
+                }
+
+                testClassBuilder.AppendLine(");");
+
+                if (!method.Flags.HasFlag(MethodFlags.Static))
+                {
+                    testClassBuilder.Append(
+                      $"""
+                        {__ + __}instance.Free();
+                        
+                        """
+                    );
+                }
+
+                testClassBuilder.Append(
+                    $$"""
+                      {{__}}}
+                      
+                      """
+                );
+            }
+
+            testClassBuilder.AppendLine("}");
+        }
     }
 
     private record GodotAnnotatedVariantType(
@@ -442,7 +579,7 @@ public partial class WrapperGeneratorMain
         {
             if (types.Length == 0) throw new ArgumentException("Types cannot be empty", nameof(types));
             Types = types;
-            
+
             // If both types are both GodotClassType, find their common ancestor
             // and render that instead
             if (types.Length == 1)
@@ -477,13 +614,13 @@ public partial class WrapperGeneratorMain
 
         public override HashSet<Variant.Type> Accepts { get; }
 
-        public override void RenderType(StringBuilder builder, GenerationLogger logger) => 
+        public override void RenderType(StringBuilder builder, GenerationLogger logger) =>
             CommonBaseType.RenderType(builder, logger);
 
         public override string ToString() => $"<{string.Join<GodotType>(", ", Types)}>";
         public GodotType[] Types { get; }
         public GodotType CommonBaseType { get; }
-        
+
         private static GodotType FindCommonBaseType(GodotClassType[] types)
         {
             if (types.Length == 0) return null;
