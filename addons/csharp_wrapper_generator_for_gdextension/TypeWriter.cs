@@ -76,15 +76,5 @@ public partial class WrapperGeneratorMain
             
             warnings.Add(message);
         }
-
-        public static void WriteTypeUnitTest(GodotClassType type, ConcurrentBag<FileConstruction> files)
-        {
-            if(!type.CanInstantiate) return;
-            
-            var fileBuilder = new StringBuilder();
-            type.RenderClassTest(fileBuilder);
-            var code = fileBuilder.ToString();
-            files.Add(new($"{type.CSharpTypeName}.unittest.cs", code));
-        }
     }
 }
