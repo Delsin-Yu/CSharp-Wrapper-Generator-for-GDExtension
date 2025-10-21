@@ -57,12 +57,11 @@ public partial class WrapperGeneratorMain
             public GodotNamedType _ParentType => godotClassType.ParentType;
         }
 
-        private const string Namespace = "GDExtension.Wrappers";
         private const string BindMethodName = "Bind";
         private const string TypeGDExtensionCacheName = "NativeName";
         private const string WrapperConstructorName = "Instantiate";
 
-        public void RenderClass(StringBuilder classBuilder, GenerationLogger logger)
+        public void RenderClass(StringBuilder classBuilder, string nameSpace, GenerationLogger logger)
         {
             classBuilder.Append(
                 $"""
@@ -74,7 +73,7 @@ public partial class WrapperGeneratorMain
                  using Godot;
                  using Godot.Collections;
 
-                 namespace {Namespace};
+                 namespace {nameSpace};
 
                  public 
                  """
@@ -568,6 +567,24 @@ public partial class WrapperGeneratorMain
         "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
     ];
 
+    private static string EscapeNamespaceKeyWords(string sourceNamespace)
+    {
+        var namespaceParts = sourceNamespace.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var i = 0; i < namespaceParts.Length; i++)
+            namespaceParts[i] = EscapeCSharpKeyWords(namespaceParts[i]);
+        return string.Join('.', namespaceParts);
+    }
+
+    [GeneratedRegex("[:/\\\\?*\"|%<>]")] private static partial Regex InvalidPathCharacterRegex();
+    
+    public static string EscapePath(string path)
+    {
+        var parts = path.Split(["/", "\\"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var i = 0; i < parts.Length; i++)
+            parts[i] = InvalidPathCharacterRegex().Replace(parts[i], "_");
+        return string.Join('/', parts);
+    }
+    
     private static string EscapeCSharpKeyWords(string sourceName)
     {
         sourceName = ValidIdentifierCharacterRegex().Replace(sourceName, "_");

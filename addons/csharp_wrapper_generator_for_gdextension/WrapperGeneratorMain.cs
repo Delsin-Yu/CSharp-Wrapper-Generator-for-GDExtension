@@ -11,11 +11,78 @@ public partial class WrapperGeneratorMain : EditorPlugin
 {
     private Button _button;
     private VBoxContainer _vbox;
+    private LineEdit _nameSpace;
+    private LineEdit _targetPath;
 
+    private const string DefaultNamespace = "GDExtension.Wrappers";
+    private const string DefaultPath = "GDExtensionWrappers";
+    
     public override void _EnterTree()
     {
         _button = new() { Text = "Generate" };
         _vbox = new() { Name = "Wrapper Generator" };
+        var grid = new GridContainer { Columns = 2 };
+
+        grid.AddChild(new Label{Text = "Namespace:"});
+        
+        _nameSpace = new()
+        {
+            Text = DefaultNamespace,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        };
+        const string namespaceSavePath = "gdextension_wrapper_generator/namespace";
+        if(ProjectSettings.HasSetting(namespaceSavePath))
+        {
+            var savedNamespaceVariant = ProjectSettings.GetSetting(namespaceSavePath);
+            if(savedNamespaceVariant.VariantType == Variant.Type.String)
+            {
+                var savedNamespace = EscapeNamespaceKeyWords(savedNamespaceVariant.AsString());
+                _nameSpace.Text = savedNamespace;
+                ProjectSettings.SetSetting(namespaceSavePath, savedNamespace);
+            }
+        }
+        _nameSpace.TextSubmitted += text =>
+        {
+            text = EscapeNamespaceKeyWords(text);
+            _nameSpace.Text = text;
+            ProjectSettings.SetSetting(namespaceSavePath, text);
+        };
+        grid.AddChild(_nameSpace);
+            
+        grid.AddChild(new Label{Text = "Save Path:"});
+
+        _targetPath = new()
+        {
+            Text = DefaultPath, 
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        const string pathSavePath = "gdextension_wrapper_generator/target_path";
+        if(ProjectSettings.HasSetting(pathSavePath))
+        {
+            var savedPathVariant = ProjectSettings.GetSetting(pathSavePath);
+            if(savedPathVariant.VariantType == Variant.Type.String)
+            {
+                var savedPath = EscapePath(savedPathVariant.AsString());
+                _targetPath.Text = savedPath;
+                ProjectSettings.SetSetting(pathSavePath, savedPath);
+            }
+        }
+        _targetPath.TextSubmitted += text =>
+        {
+            text = EscapePath(text);
+            _targetPath.Text = text;
+            ProjectSettings.SetSetting(pathSavePath, text);
+        };
+        var targetPathBox = new HBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        };
+        targetPathBox.AddThemeConstantOverride("separation", 0);
+        targetPathBox.AddChild(new Label { Text = "res://" });
+        targetPathBox.AddChild(_targetPath);
+        grid.AddChild(targetPathBox);
+        
+        _vbox.AddChild(grid);
         _vbox.AddChild(_button);
         _button.Pressed += DoGenerate;
         AddControlToDock(DockSlot.LeftBr, _vbox);
@@ -34,11 +101,11 @@ public partial class WrapperGeneratorMain : EditorPlugin
         var warnings = new ConcurrentBag<string>();
         TypeCollector.CreateClassDiagram(out var gdExtensionTypes, warnings);
         
-        
         var files = new ConcurrentBag<FileConstruction>();
-        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, files, warnings));
+        var nameSpace = _nameSpace.Text;
+        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, nameSpace, files, warnings));
         
-        var outputDir = ProjectSettings.GlobalizePath("res://GDExtensionWrappers");
+        var outputDir = ProjectSettings.GlobalizePath($"res://{_targetPath.Text}");
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         Directory.CreateDirectory(outputDir!);
         files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));

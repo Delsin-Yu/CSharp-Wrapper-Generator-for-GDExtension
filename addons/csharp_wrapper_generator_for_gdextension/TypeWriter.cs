@@ -62,12 +62,12 @@ public partial class WrapperGeneratorMain
     
     private static class TypeWriter
     {
-        public static void WriteType(GodotClassType type, ConcurrentBag<FileConstruction> files, ConcurrentBag<string> warnings)
+        public static void WriteType(GodotClassType type, string nameSpace, ConcurrentBag<FileConstruction> files, ConcurrentBag<string> warnings)
         {
             var fileBuilder = new StringBuilder();
 
             var logger = new GenerationLogger(type);
-            type.RenderClass(fileBuilder, logger);
+            type.RenderClass(fileBuilder, nameSpace, logger);
 
             var code = fileBuilder.ToString();
             files.Add(new($"{type.CSharpTypeName}.cs", code));
