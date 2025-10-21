@@ -261,8 +261,8 @@ public partial class WrapperGeneratorMain
                             propertyInfo.GodotName,
                             csharpPropertyName,
                             propertyInfo.Type,
-                            getterMethod,
-                            setterMethod
+                            setterMethod,
+                            getterMethod
                         )
                     );
                 }
