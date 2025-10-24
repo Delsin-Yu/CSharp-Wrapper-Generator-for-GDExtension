@@ -14,10 +14,13 @@ public partial class WrapperGeneratorMain : EditorPlugin
     private VBoxContainer _vbox;
     private LineEdit _nameSpace;
     private LineEdit _targetPath;
+    private EditorSettings _editorSettings;
 
     private const string DefaultNamespace = "GDExtension.Wrappers";
     private const string DefaultPath = "GDExtensionWrappers";
-    
+    private const string NamespaceSavePath = "gdextension_wrapper_generator/namespace";
+    private const string PathSavePath = "gdextension_wrapper_generator/target_path";
+
     public override void _EnterTree()
     {
         _button = new() { Text = "Generate" };
@@ -26,54 +29,46 @@ public partial class WrapperGeneratorMain : EditorPlugin
 
         grid.AddChild(new Label{Text = "Namespace:"});
         
-        _nameSpace = new()
+        _nameSpace = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _editorSettings = EditorInterface.Singleton.GetEditorSettings();
+        
+        if (!_editorSettings.HasSetting(NamespaceSavePath) || _editorSettings.GetSetting(NamespaceSavePath).VariantType != Variant.Type.String) 
+            _editorSettings.SetSetting(NamespaceSavePath, DefaultNamespace);
+        var propertyInfo = new Godot.Collections.Dictionary
         {
-            Text = DefaultNamespace,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            { "name", NamespaceSavePath },
+            { "type", Variant.From(Variant.Type.String) },
+            { "hint", "" },
+            { "hint_string", "" },
         };
-        const string namespaceSavePath = "gdextension_wrapper_generator/namespace";
-        if(ProjectSettings.HasSetting(namespaceSavePath))
-        {
-            var savedNamespaceVariant = ProjectSettings.GetSetting(namespaceSavePath);
-            if(savedNamespaceVariant.VariantType == Variant.Type.String)
-            {
-                var savedNamespace = EscapeNamespaceKeyWords(savedNamespaceVariant.AsString());
-                _nameSpace.Text = savedNamespace;
-                ProjectSettings.SetSetting(namespaceSavePath, savedNamespace);
-            }
-        }
-        _nameSpace.TextSubmitted += text =>
-        {
-            text = EscapeNamespaceKeyWords(text);
-            _nameSpace.Text = text;
-            ProjectSettings.SetSetting(namespaceSavePath, text);
-        };
+        _editorSettings.AddPropertyInfo(propertyInfo);
+        
+        var savedNamespaceVariant = _editorSettings.GetSetting(NamespaceSavePath);
+        var savedNamespace = EscapeNamespaceKeyWords(savedNamespaceVariant.AsString());
+        _nameSpace.Text = savedNamespace;
+        _nameSpace.TextChanged += text => _editorSettings.SetSetting(NamespaceSavePath, text);
         grid.AddChild(_nameSpace);
-            
+        
         grid.AddChild(new Label{Text = "Save Path:"});
 
-        _targetPath = new()
+        _targetPath = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+
+        if(!_editorSettings.HasSetting(PathSavePath) || _editorSettings.GetSetting(PathSavePath).VariantType != Variant.Type.String) 
+            _editorSettings.SetSetting(PathSavePath, DefaultPath);
+        var pathPropertyInfo = new Godot.Collections.Dictionary
         {
-            Text = DefaultPath, 
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+            { "name", PathSavePath },
+            { "type", Variant.From(Variant.Type.String) },
+            { "hint", "" },
+            { "hint_string", "" },
         };
-        const string pathSavePath = "gdextension_wrapper_generator/target_path";
-        if(ProjectSettings.HasSetting(pathSavePath))
-        {
-            var savedPathVariant = ProjectSettings.GetSetting(pathSavePath);
-            if(savedPathVariant.VariantType == Variant.Type.String)
-            {
-                var savedPath = EscapePath(savedPathVariant.AsString());
-                _targetPath.Text = savedPath;
-                ProjectSettings.SetSetting(pathSavePath, savedPath);
-            }
-        }
-        _targetPath.TextSubmitted += text =>
-        {
-            text = EscapePath(text);
-            _targetPath.Text = text;
-            ProjectSettings.SetSetting(pathSavePath, text);
-        };
+        _editorSettings.AddPropertyInfo(pathPropertyInfo);
+        
+        var savedPathVariant = _editorSettings.GetSetting(PathSavePath);
+        var savedPath = EscapePath(savedPathVariant.AsString());
+        _targetPath.Text = savedPath;
+        _targetPath.TextChanged += text => _editorSettings.SetSetting(PathSavePath, text);
+        
         var targetPathBox = new HBoxContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
@@ -103,10 +98,26 @@ public partial class WrapperGeneratorMain : EditorPlugin
         TypeCollector.CreateClassDiagram(out var gdExtensionTypes, warnings);
         
         var files = new ConcurrentBag<FileConstruction>();
-        var nameSpace = _nameSpace.Text;
-        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, nameSpace, files, warnings));
+        
+        var escapedNamespace = EscapeNamespaceKeyWords(_nameSpace.Text);
+        if (escapedNamespace != _nameSpace.Text)
+        {
+            GD.PushWarning($"The namespace contained invalid characters and was escaped to '{escapedNamespace}'");
+            _nameSpace.Text = escapedNamespace;
+            _editorSettings.Set(NamespaceSavePath, escapedNamespace);
+        }
+        
+        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, escapedNamespace, files, warnings));
 
-        var godotTargetPath = $"res://{_targetPath.Text}";
+        var escapedPath = EscapePath(_targetPath.Text);
+        if (escapedPath != _targetPath.Text)
+        {
+            GD.PushWarning($"The target path contained invalid characters and was escaped to '{escapedPath}'");
+            _targetPath.Text = escapedPath;
+            _editorSettings.Set(PathSavePath, escapedPath);
+        }
+
+        var godotTargetPath = $"res://{escapedPath}";
         var outputDir = ProjectSettings.GlobalizePath(godotTargetPath);
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         Directory.CreateDirectory(outputDir!);
