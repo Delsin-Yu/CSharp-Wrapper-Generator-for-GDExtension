@@ -104,8 +104,8 @@ public partial class WrapperGeneratorMain : EditorPlugin
         {
             GD.PushWarning($"The namespace contained invalid characters and was escaped to '{escapedNamespace}'");
             _nameSpace.Text = escapedNamespace;
-            _editorSettings.Set(NamespaceSavePath, escapedNamespace);
         }
+        _editorSettings.Set(NamespaceSavePath, escapedNamespace);
         
         gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, escapedNamespace, files, warnings));
 
@@ -114,8 +114,8 @@ public partial class WrapperGeneratorMain : EditorPlugin
         {
             GD.PushWarning($"The target path contained invalid characters and was escaped to '{escapedPath}'");
             _targetPath.Text = escapedPath;
-            _editorSettings.Set(PathSavePath, escapedPath);
         }
+        _editorSettings.Set(PathSavePath, escapedPath);
 
         var godotTargetPath = $"res://{escapedPath}";
         var outputDir = ProjectSettings.GlobalizePath(godotTargetPath);
@@ -125,7 +125,7 @@ public partial class WrapperGeneratorMain : EditorPlugin
         {
             var targetPath = godotTargetPath.PathJoin(file.FileName);
             using var fileAccess = FileAccess.Open(targetPath, FileAccess.ModeFlags.Write);
-            fileAccess.StoreString(file.SourceCode.ReplaceLineEndings("\n"));
+            fileAccess.StoreString(file.SourceCode.Replace("\r\n","\n"));
         }
 
         var warningArray = warnings.ToHashSet().Order().ToArray();
