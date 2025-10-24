@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using Godot;
+using FileAccess = Godot.FileAccess;
 
 namespace GDExtensionAPIGenerator;
 
@@ -104,11 +105,17 @@ public partial class WrapperGeneratorMain : EditorPlugin
         var files = new ConcurrentBag<FileConstruction>();
         var nameSpace = _nameSpace.Text;
         gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, nameSpace, files, warnings));
-        
-        var outputDir = ProjectSettings.GlobalizePath($"res://{_targetPath.Text}");
+
+        var godotTargetPath = $"res://{_targetPath.Text}";
+        var outputDir = ProjectSettings.GlobalizePath(godotTargetPath);
         if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         Directory.CreateDirectory(outputDir!);
-        files.AsParallel().ForAll(file => File.WriteAllText(Path.Combine(outputDir, file.FileName), file.SourceCode));
+        foreach (var file in files)
+        {
+            var targetPath = godotTargetPath.PathJoin(file.FileName);
+            using var fileAccess = FileAccess.Open(targetPath, FileAccess.ModeFlags.Write);
+            fileAccess.StoreString(file.SourceCode.ReplaceLineEndings("\n"));
+        }
 
         var warningArray = warnings.ToHashSet().Order().ToArray();
         if(warningArray.Length == 0) return;
