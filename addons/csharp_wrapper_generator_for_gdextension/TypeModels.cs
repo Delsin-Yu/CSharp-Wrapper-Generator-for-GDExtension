@@ -36,6 +36,20 @@ public partial class WrapperGeneratorMain
             return depth;
         }
 
+        public string GetNativeClassName()
+        {
+            if (ApiType != ClassDB.ApiType.Extension)
+                return CSharpTypeName.String;
+            string className = GodotTypeName.String;
+            ClassDB.ApiType apiType = ClassDB.ClassGetApiType(className);
+            while (apiType == ClassDB.ApiType.Extension)
+            {
+                className = ClassDB.GetParentClass(className);
+                apiType = ClassDB.ClassGetApiType(className);
+            }
+            return className;
+        }
+
         public GodotNamedType ParentType { get; set; }
         public List<GodotFunctionInfo> Methods { get; } = [];
         public List<GodotFunctionInfo> Signals { get; } = [];
@@ -414,6 +428,13 @@ public partial class WrapperGeneratorMain
         {
             using var _ = logger.BeginScope(ToString());
             if (this is GodotAnnotatedVariantType { VariantType: Variant.Type.Nil }) return;
+            if (this is GodotClassType godotClass)
+            {
+                builder.Append(".As<");
+                builder.Append(godotClass.GetNativeClassName());
+                builder.Append(">()");
+                return;
+            }
             builder.Append(".As<");
             RenderType(builder, logger);
             builder.Append(">()");
@@ -725,8 +746,19 @@ public partial class WrapperGeneratorMain
             propertyBuilder.AppendLine($$"""{{__}}{""");
             if (Getter is not null)
             {
-                propertyBuilder.Append($"{__ + __}get => Get(GDExtensionPropertyName.{CSharpPropertyName})");
+                propertyBuilder.Append($"{__ + __}get => ");
+
+                bool isClassType = false;
+
+                if (GodotPropertyType is GodotClassType classType && classType.ApiType == ClassDB.ApiType.Extension)
+                {
+                    propertyBuilder.Append(classType.CSharpTypeName).Append(".Bind(");
+                    isClassType = true;
+                }
+
+                propertyBuilder.Append($"Get(GDExtensionPropertyName.{CSharpPropertyName})");
                 GodotPropertyType.RenderVariantToCSharp(propertyBuilder, logger);
+                if (isClassType) propertyBuilder.Append(')');
                 propertyBuilder.AppendLine(";");
             }
 
@@ -764,6 +796,14 @@ public partial class WrapperGeneratorMain
             methodBuilder.Append(' ').Append(CSharpFunctionName);
             RenderFunctionArguments(methodBuilder, logger);
             methodBuilder.AppendLine(" => ").Append(__ + __);
+            
+            var returnIsExtension = false;
+            if (ReturnValue.Type is GodotClassType godotClass && ClassDB.ClassGetApiType(godotClass.GodotTypeName.String) == ClassDB.ApiType.Extension)
+            {
+                methodBuilder.Append(godotClass.CSharpTypeName).Append(".Bind(");
+                returnIsExtension = true;
+            }
+
             if (isStatic) methodBuilder.Append("ClassDB.ClassCallStatic(NativeName, ");
             else methodBuilder.Append("Call(");
             methodBuilder.Append($"GDExtensionMethodName.{CSharpFunctionName}, [");
@@ -778,6 +818,7 @@ public partial class WrapperGeneratorMain
 
             methodBuilder.Append("])");
             ReturnValue.Type.RenderVariantToCSharp(methodBuilder, logger);
+            if (returnIsExtension) methodBuilder.Append(')');
             methodBuilder.AppendLine(";");
         }
 
