@@ -398,13 +398,13 @@ public partial class WrapperGeneratorMain
                                     }
                                     else
                                     {
-                                        logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions under the GodotType {matchedEnumOwnerType}: \n{string.Join("\n", matchedEnumOwnerTypeCandidates.Keys.Select(x => __ + __ + __ + x.String))}");
+                                        logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions under the GodotType {matchedEnumOwnerType}: \n{string.Join("\n", matchedEnumOwnerTypeCandidates.Keys.Select(x => PrintIndent + PrintIndent + PrintIndent + x.String))}");
                                         propertyType = variantTypeAsEnumFallback;
                                     }
                                 }
                                 else
                                 {
-                                    logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to the declared enum type {matchedEnumOwnerType}, the supplied constant definition set have following enum types candidates: \n{string.Join(", ", candidates.Keys.Select(x => __ + __ + __ + x))}");
+                                    logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to the declared enum type {matchedEnumOwnerType}, the supplied constant definition set have following enum types candidates: \n{string.Join(", ", candidates.Keys.Select(x => PrintIndent + PrintIndent + PrintIndent + x))}");
                                     propertyType = variantTypeAsEnumFallback;
                                 }
                             }
@@ -417,13 +417,13 @@ public partial class WrapperGeneratorMain
                                         propertyType = candidate.Value.First().Value;
                                     else
                                     {
-                                        logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions under type {candidate.Key}: \n{string.Join("\n", candidate.Value.Keys.Select(x => __ + __ + __ + x.String))}");
+                                        logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions under type {candidate.Key}: \n{string.Join("\n", candidate.Value.Keys.Select(x => PrintIndent + PrintIndent + PrintIndent + x.String))}");
                                         propertyType = variantTypeAsEnumFallback;
                                     }
                                 }
                                 else
                                 {
-                                    logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions: \n{string.Join("\n", candidates.SelectMany(type => type.Value.Select(enumName => $"{__ + __ + __ + type.Key}.{enumName.Key.String}")))}");
+                                    logger.Add($"Unable to disambiguate the supplied constant definition set [{hintString}] to one of the following enum definitions: \n{string.Join("\n", candidates.SelectMany(type => type.Value.Select(enumName => $"{PrintIndent + PrintIndent + PrintIndent + type.Key}.{enumName.Key.String}")))}");
                                     propertyType = variantTypeAsEnumFallback;
                                 }
                             }

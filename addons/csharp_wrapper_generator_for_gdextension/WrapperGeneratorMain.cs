@@ -14,12 +14,18 @@ public partial class WrapperGeneratorMain : EditorPlugin
     private VBoxContainer _vbox;
     private LineEdit _nameSpace;
     private LineEdit _targetPath;
+    private OptionButton _indentationMode;
     private EditorSettings _editorSettings;
 
     private const string DefaultNamespace = "GDExtension.Wrappers";
     private const string DefaultPath = "GDExtensionWrappers";
+    private const int DefaultIndentationMode = IndentationSpacesId;
     private const string NamespaceSavePath = "gdextension_wrapper_generator/namespace";
     private const string PathSavePath = "gdextension_wrapper_generator/target_path";
+    private const string IndentationModeSavePath = "gdextension_wrapper_generator/indentation_mode";
+
+    private const int IndentationSpacesId = 0;
+    private const int IndentationTabsId = 1;
 
     public override void _EnterTree()
     {
@@ -77,6 +83,28 @@ public partial class WrapperGeneratorMain : EditorPlugin
         targetPathBox.AddChild(new Label { Text = "res://" });
         targetPathBox.AddChild(_targetPath);
         grid.AddChild(targetPathBox);
+
+        if (!_editorSettings.HasSetting(IndentationModeSavePath) || _editorSettings.GetSetting(IndentationModeSavePath).VariantType != Variant.Type.Int)
+            _editorSettings.SetSetting(IndentationModeSavePath, DefaultIndentationMode);
+        var indentationPropertyInfo = new Godot.Collections.Dictionary
+        {
+            { "name", IndentationModeSavePath },
+            { "type", Variant.From(Variant.Type.Int) },
+            { "hint", Variant.From(PropertyHint.Enum) },
+            { "hint_string", "Spaces,Tabs" },
+        };
+        _editorSettings.AddPropertyInfo(indentationPropertyInfo);
+        
+        _indentationMode = new();
+        _indentationMode.AddItem("Spaces", IndentationSpacesId);
+        _indentationMode.AddItem("Tabs", IndentationTabsId);
+        var savedIndentationVariant = _editorSettings.GetSetting(IndentationModeSavePath);
+        var savedIndentation = savedIndentationVariant.AsInt32();
+        _indentationMode.Select(savedIndentation);
+        _indentationMode.ItemSelected += id => _editorSettings.SetSetting(IndentationModeSavePath, (int)id);
+
+        grid.AddChild(new Label { Text = "Indentation:" });
+        grid.AddChild(_indentationMode);
         
         _vbox.AddChild(grid);
         _vbox.AddChild(_button);
@@ -107,7 +135,15 @@ public partial class WrapperGeneratorMain : EditorPlugin
         }
         _editorSettings.Set(NamespaceSavePath, escapedNamespace);
         
-        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, escapedNamespace, files, warnings));
+        var indentationMode = _indentationMode.GetSelectedId();
+        var indent = indentationMode switch
+        {
+            IndentationSpacesId => "    ",
+            IndentationTabsId => "\t",
+            _ => "    "
+        };
+
+        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, escapedNamespace, indent, files, warnings));
 
         var escapedPath = EscapePath(_targetPath.Text);
         if (escapedPath != _targetPath.Text)
@@ -125,7 +161,7 @@ public partial class WrapperGeneratorMain : EditorPlugin
         {
             var targetPath = godotTargetPath.PathJoin(file.FileName);
             using var fileAccess = FileAccess.Open(targetPath, FileAccess.ModeFlags.Write);
-            fileAccess.StoreString(file.SourceCode.Replace("\r\n","\n"));
+            fileAccess.StoreString(file.SourceCode);
         }
 
         var warningArray = warnings.ToHashSet().Order().ToArray();

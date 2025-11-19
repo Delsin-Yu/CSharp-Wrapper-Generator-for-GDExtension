@@ -9,6 +9,8 @@ namespace GDExtensionAPIGenerator;
 
 public partial class WrapperGeneratorMain
 {
+    private const string PrintIndent = "    ";
+    
     public record FileConstruction(string FileName, string SourceCode);
 
     private class GenerationLogger(GodotClassType type)
@@ -48,11 +50,11 @@ public partial class WrapperGeneratorMain
             sb.AppendLine($"[{type.GodotTypeName}]");
             foreach (var messageItem in _messages)
             {
-                sb.AppendLine($"{__}{messageItem.Content}");
+                sb.AppendLine($"{PrintIndent}{messageItem.Content}");
                 foreach (var stack in messageItem.StackTrace)
                 {
-                    if(string.IsNullOrEmpty(stack.Name)) sb.AppendLine($"{__ + __}in {stack.Scope}");
-                    else sb.AppendLine($"{__ + __}in {stack.Scope}: {stack.Name}");
+                    if(string.IsNullOrEmpty(stack.Name)) sb.AppendLine($"{PrintIndent + PrintIndent}in {stack.Scope}");
+                    else sb.AppendLine($"{PrintIndent + PrintIndent}in {stack.Scope}: {stack.Name}");
                 }
             }
             message = sb.ToString();
@@ -62,12 +64,12 @@ public partial class WrapperGeneratorMain
     
     private static class TypeWriter
     {
-        public static void WriteType(GodotClassType type, string nameSpace, ConcurrentBag<FileConstruction> files, ConcurrentBag<string> warnings)
+        public static void WriteType(GodotClassType type, string nameSpace, string indent, ConcurrentBag<FileConstruction> files, ConcurrentBag<string> warnings)
         {
             var fileBuilder = new StringBuilder();
 
             var logger = new GenerationLogger(type);
-            type.RenderClass(fileBuilder, nameSpace, logger);
+            type.RenderClass(fileBuilder, nameSpace, indent, logger);
 
             var code = fileBuilder.ToString();
             files.Add(new($"{type.CSharpTypeName}.cs", code));
