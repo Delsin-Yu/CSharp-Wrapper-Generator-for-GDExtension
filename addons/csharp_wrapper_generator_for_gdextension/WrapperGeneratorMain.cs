@@ -1,4 +1,5 @@
 #if TOOLS
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -155,8 +156,22 @@ public partial class WrapperGeneratorMain : EditorPlugin
 
         var godotTargetPath = $"res://{escapedPath}";
         var outputDir = ProjectSettings.GlobalizePath(godotTargetPath);
-        if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
-        Directory.CreateDirectory(outputDir!);
+        if (!Directory.Exists(outputDir))
+            Directory.CreateDirectory(outputDir!);
+        else
+            foreach (var path in Directory.GetFiles(outputDir, "*.cs"))
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception e)
+                {
+                    GD.PrintErr($"Unable to delete old wrapper file at path {path}, exception: {e}");
+                    return;
+                }
+            }
+
         foreach (var file in files)
         {
             var targetPath = godotTargetPath.PathJoin(file.FileName);
@@ -165,10 +180,29 @@ public partial class WrapperGeneratorMain : EditorPlugin
         }
 
         var warningArray = warnings.ToHashSet().Order().ToArray();
-        if(warningArray.Length == 0) return;
-        GD.PushWarning($"({warningArray.Length}) warning(s) during rendering the GDExtension wrapper classes:");
-        foreach (var warningMessage in warningArray) 
-            GD.PushWarning(warningMessage);
+        if (warningArray.Length != 0)
+        {
+            GD.PushWarning($"({warningArray.Length}) warning(s) during rendering the GDExtension wrapper classes:");
+            foreach (var warningMessage in warningArray)
+                GD.PushWarning(warningMessage);
+        }
+
+        foreach (var uidPath in Directory.GetFiles(outputDir, "*.uid"))
+        {
+            var directory = Path.GetDirectoryName(uidPath);
+            if (directory is null) continue;
+            var originalFileName = Path.GetFileName(uidPath);
+            if (originalFileName.GetExtension() != "cs") continue;
+            if (File.Exists(Path.Combine(directory, originalFileName))) continue;
+            try
+            {
+                File.Delete(uidPath);
+            }
+            catch (Exception e)
+            {
+                GD.PrintErr($"Unable to delete old wrapper uid file at path {uidPath}, exception: {e}");
+            }
+        }
     }
 }
 
