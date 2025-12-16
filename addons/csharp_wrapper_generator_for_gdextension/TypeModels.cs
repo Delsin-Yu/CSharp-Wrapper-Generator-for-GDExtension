@@ -541,8 +541,11 @@ public partial class WrapperGeneratorMain
 
         public void RenderGDExtensionToWrapper(StringBuilder builder, GenerationLogger logger)
         {
-            if (!IsGDExtensionType) 
+            if (!IsGDExtensionType)
+            {
                 logger.Add($"{Type} is not a GDExtension type");
+                return;
+            }
 
             var godotClass = (GodotClassType)Type;
             builder.Append(godotClass.CSharpTypeName);
