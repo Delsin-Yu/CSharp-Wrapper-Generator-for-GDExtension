@@ -24,6 +24,8 @@ public partial class WrapperGeneratorMain
         bool CanInstantiate
     ) : GodotNamedType(GodotTypeName, CSharpTypeName)
     {
+        public bool IsGDExtensionType => ApiType == ClassDB.ApiType.Extension;
+
         public int GetInheritanceDepth()
         {
             var depth = 0;
@@ -533,7 +535,21 @@ public partial class WrapperGeneratorMain
         PropertyUsageFlags Usage
     )
     {
+        public bool IsGDExtensionType => Type is GodotClassType godotClass && godotClass.IsGDExtensionType;
+
         public override string ToString() => $"{Type} {CSharpName.EscapedString}";
+
+        public void RenderGDExtensionToWrapper(StringBuilder builder, GenerationLogger logger)
+        {
+            if (!IsGDExtensionType) 
+                logger.Add($"{Type} is not a GDExtension type");
+
+            var godotClass = (GodotClassType)Type;
+            builder.Append(godotClass.CSharpTypeName);
+            builder.Append(".Bind(");
+            RenderVariantToCSharp(builder, logger);
+            builder.Append(')');
+        }
 
         public void RenderCSharpToVariant(StringBuilder builder)
         {
@@ -608,6 +624,8 @@ public partial class WrapperGeneratorMain
 
     private readonly record struct GodotMethodArgument(GodotPropertyInfo Info, Variant? Default)
     {
+        public bool IsGDExtensionType => Info.IsGDExtensionType;
+
         public override string ToString() => Default == null ? Info.ToString() : $"{Info} = {Default}";
 
         private static readonly HashSet<Variant.Type> RequireExtraDefaultValuePopulationVariantTypes =
@@ -623,6 +641,10 @@ public partial class WrapperGeneratorMain
             Variant.Type.PackedFloat32Array, Variant.Type.PackedFloat64Array, Variant.Type.PackedStringArray,
             Variant.Type.PackedVector2Array, Variant.Type.PackedVector3Array, Variant.Type.PackedColorArray, Variant.Type.PackedVector4Array
         ];
+
+        public void RenderGDExtensionToWrapper(StringBuilder builder, GenerationLogger logger) =>          
+            Info.RenderGDExtensionToWrapper(builder, logger);
+        
 
         public void RenderCSharpToVariant(StringBuilder methodArgumentBuilder) =>
             Info.RenderCSharpToVariant(methodArgumentBuilder);
@@ -851,7 +873,14 @@ public partial class WrapperGeneratorMain
             {
                 if (isFirst) isFirst = false;
                 else signalBuilder.Append(", ");
-                methodArgument.RenderVariantToCSharp(signalBuilder, logger);
+                if (methodArgument.IsGDExtensionType)
+                {
+                    methodArgument.RenderGDExtensionToWrapper(signalBuilder, logger);
+                }
+                else
+                {
+                    methodArgument.RenderVariantToCSharp(signalBuilder, logger);
+                }
             }
 
             signalBuilder.AppendLine("));");
