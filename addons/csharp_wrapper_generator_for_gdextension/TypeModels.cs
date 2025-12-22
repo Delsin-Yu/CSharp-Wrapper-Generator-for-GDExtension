@@ -78,6 +78,7 @@ public partial class WrapperGeneratorMain
 
                  namespace {nameSpace};
 
+                 [Tool]
                  public 
                  """
             );
