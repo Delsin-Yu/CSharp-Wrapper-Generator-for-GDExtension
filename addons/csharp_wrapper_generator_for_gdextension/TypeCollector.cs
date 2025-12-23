@@ -66,27 +66,43 @@ public partial class WrapperGeneratorMain
                             : x.First().CSharpTypeName
                 );
 
-            foreach (GodotName godotClassName in ClassDBAccess.GetClassList())
+
+            foreach (var godotClassName in ClassDBAccess.GetClassList())
             {
-                CSharpName csharpTypeName = godotTypeNameToCSharpTypeNameMap.GetValueOrDefault(godotClassName, new(godotClassName.String));
-                if (godotClassName.String == "Object") continue;
-  
+                var csharpTypeName = godotTypeNameToCSharpTypeNameMap.GetValueOrDefault(godotClassName, new(godotClassName.String));
+
                 var apiType = ClassDBAccess.ClassGetApiType(godotClassName);
-                
-                CSharpName marshalClassName;
-                if(apiType != ClassDB.ApiType.Extension) marshalClassName = new(csharpTypeName.String);
-                else
+                if (apiType == ClassDB.ApiType.Extension) continue;
+                if (godotClassName.String == "Object") continue;
+                godotTypeMap.Types.Add(
+                    godotClassName,
+                    new GodotClassType(
+                        godotClassName,
+                        csharpTypeName,
+                        csharpTypeName,
+                        apiType,
+                        ClassDBAccess.CanInstantiate(godotClassName)
+                    )
+                );
+            }
+
+            foreach (var godotClassName in ClassDBAccess.GetClassList())
+            {
+                var csharpTypeName = godotTypeNameToCSharpTypeNameMap.GetValueOrDefault(godotClassName, new(godotClassName.String));
+
+                var apiType = ClassDBAccess.ClassGetApiType(godotClassName);
+                if (apiType != ClassDB.ApiType.Extension) continue;
+
+                var className = godotClassName;
+                var parentApiType = apiType;
+                while (parentApiType == ClassDB.ApiType.Extension)
                 {
-                    var className = godotClassName;
-                    var parentApiType = apiType;
-                    while (parentApiType == ClassDB.ApiType.Extension)
-                    {
-                        className = ClassDBAccess.GetParentClass(className);
-                        parentApiType = ClassDBAccess.ClassGetApiType(className);
-                    }
-                    marshalClassName = godotTypeMap.Types[className].CSharpTypeName;
+                    className = ClassDBAccess.GetParentClass(className);
+                    parentApiType = ClassDBAccess.ClassGetApiType(className);
                 }
-                
+
+                var marshalClassName = godotTypeMap.Types[className].CSharpTypeName;
+
                 godotTypeMap.Types.Add(
                     godotClassName,
                     new GodotClassType(
