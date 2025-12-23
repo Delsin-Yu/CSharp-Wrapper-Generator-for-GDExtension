@@ -64,7 +64,12 @@ public partial class WrapperGeneratorMain
     
     private static class TypeWriter
     {
-        public static void WriteType(GodotClassType type, string nameSpace, string indent, ConcurrentBag<FileConstruction> files, ConcurrentBag<string> warnings)
+        public static void WriteType(
+            GodotClassType type,
+            string nameSpace, 
+            string indent,
+            ConcurrentBag<FileConstruction> files, 
+            ConcurrentBag<string> warnings)
         {
             var fileBuilder = new StringBuilder();
 

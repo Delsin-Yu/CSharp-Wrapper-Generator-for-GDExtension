@@ -16,6 +16,7 @@ public partial class WrapperGeneratorMain : EditorPlugin
     private LineEdit _nameSpace;
     private LineEdit _targetPath;
     private OptionButton _indentationMode;
+    private OptionButton _internalVisibilityMode;
     private EditorSettings _editorSettings;
 
     private const string DefaultNamespace = "GDExtension.Wrappers";
@@ -24,9 +25,13 @@ public partial class WrapperGeneratorMain : EditorPlugin
     private const string NamespaceSavePath = "gdextension_wrapper_generator/namespace";
     private const string PathSavePath = "gdextension_wrapper_generator/target_path";
     private const string IndentationModeSavePath = "gdextension_wrapper_generator/indentation_mode";
+    private const string InternalVisibilityModeSavePath = "gdextension_wrapper_generator/internal_visibility_mode";
 
     private const int IndentationSpacesId = 0;
     private const int IndentationTabsId = 1;
+    
+    private const int InternalDoNotExposeId = 0;
+    private const int InternalExposeId = 1;
 
     public override void _EnterTree()
     {
@@ -106,6 +111,17 @@ public partial class WrapperGeneratorMain : EditorPlugin
 
         grid.AddChild(new Label { Text = "Indentation:" });
         grid.AddChild(_indentationMode);
+
+        _internalVisibilityMode = new();
+        _internalVisibilityMode.AddItem("Do not expose", InternalDoNotExposeId);
+        _internalVisibilityMode.AddItem("Expose", InternalExposeId);
+        var savedInternalVisibilityVariant = _editorSettings.GetSetting(InternalVisibilityModeSavePath);
+        var savedInternalVisibility = savedInternalVisibilityVariant.AsInt32();
+        _internalVisibilityMode.Select(savedInternalVisibility);
+        _internalVisibilityMode.ItemSelected += id => _editorSettings.SetSetting(InternalVisibilityModeSavePath, (int)id);
+        
+        grid.AddChild(new Label { Text = "Internal Visibility:" });
+        grid.AddChild(_internalVisibilityMode);
         
         _vbox.AddChild(grid);
         _vbox.AddChild(_button);
@@ -124,7 +140,16 @@ public partial class WrapperGeneratorMain : EditorPlugin
     private void DoGenerate()
     {
         var warnings = new ConcurrentBag<string>();
-        TypeCollector.CreateClassDiagram(out var gdExtensionTypes, warnings);
+                
+        var internalVisibilityMode = _internalVisibilityMode.GetSelectedId();
+        var exposeInternalMembers = internalVisibilityMode switch
+        {
+            InternalDoNotExposeId => false,
+            InternalExposeId => true,
+            _ => false
+        };
+        
+        TypeCollector.CreateClassDiagram(exposeInternalMembers, out var gdExtensionTypes, warnings);
         
         var files = new ConcurrentBag<FileConstruction>();
         

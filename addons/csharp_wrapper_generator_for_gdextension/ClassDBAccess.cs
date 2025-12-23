@@ -14,6 +14,7 @@ public partial class WrapperGeneratorMain
         public override string ToString() => String;
         public string ToPascalCase() => String.ToPascalCase();
         public string ToSnakeCase() => String.ToSnakeCase();
+        public bool IsInternal() => String.StartsWith('_');
         public static GodotName Empty { get; } = new GodotName(string.Empty);
     }
 

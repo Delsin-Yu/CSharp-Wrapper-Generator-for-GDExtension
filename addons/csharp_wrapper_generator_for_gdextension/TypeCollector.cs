@@ -34,7 +34,7 @@ public partial class WrapperGeneratorMain
 
     private static partial class TypeCollector
     {
-        public static void CreateClassDiagram(out GodotClassType[] gdExtensionTypes, ConcurrentBag<string> warnings)
+        public static void CreateClassDiagram(bool exposeInternalMembers, out GodotClassType[] gdExtensionTypes, ConcurrentBag<string> warnings)
         {
             var constructedTypes = new GodotTypeMap();
 
@@ -42,7 +42,7 @@ public partial class WrapperGeneratorMain
             PopulateGodotClassTypes(constructedTypes);
 
             PopulateGlobalScopeEnumTypes(constructedTypes);
-            PopulateGodotClassMembers(constructedTypes, warnings);
+            PopulateGodotClassMembers(constructedTypes, exposeInternalMembers, warnings);
 
             gdExtensionTypes = constructedTypes.Types.Values
                 .OfType<GodotClassType>()
@@ -201,7 +201,7 @@ public partial class WrapperGeneratorMain
             }
         }
 
-        private static void PopulateGodotClassMembers(GodotTypeMap godotTypeMap, ConcurrentBag<string> warnings)
+        private static void PopulateGodotClassMembers(GodotTypeMap godotTypeMap, bool exposeInternalMembers, ConcurrentBag<string> warnings)
         {
             foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Core, ClassDB.ApiType.Editor, ClassDB.ApiType.Extension, ClassDB.ApiType.EditorExtension))
             {
@@ -259,6 +259,10 @@ public partial class WrapperGeneratorMain
                 foreach (var methodDefinition in methodDefinitions)
                 {
                     var methodInfo = CreateFunctionInfo(godotTypeMap, methodDefinition, logger);
+                    if (!exposeInternalMembers
+                        && methodInfo.GodotFunctionName.IsInternal()
+                        && !methodInfo.Flags.HasFlag(MethodFlags.Virtual)
+                        && !methodInfo.Flags.HasFlag(MethodFlags.VirtualRequired)) continue;
                     godotClassType.Methods.Add(methodInfo);
                 }
                 if (logger.TryGetMessages(out var message)) warnings.Add(message);
@@ -271,6 +275,7 @@ public partial class WrapperGeneratorMain
                 foreach (var propertyDefinition in propertyDefinitions)
                 {
                     var propertyInfo = CreatePropertyInfo(propertyDefinition, godotTypeMap, logger);
+                    if (!exposeInternalMembers && propertyInfo.GodotName.IsInternal()) continue;
                     var csharpPropertyName = new CSharpName(propertyInfo.GodotName.String.ToPascalCase());
                     if (propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)) continue;
                     var getter = ClassDBAccess.ClassGetPropertyGetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
@@ -303,6 +308,7 @@ public partial class WrapperGeneratorMain
                 foreach (var signalDefinition in signalDefinitions)
                 {
                     var signalInfo = CreateFunctionInfo(godotTypeMap, signalDefinition, logger);
+                    if (!exposeInternalMembers && signalInfo.GodotFunctionName.IsInternal()) continue;
                     godotClassType.Signals.Add(signalInfo);
                 }
                 if (logger.TryGetMessages(out var message)) warnings.Add(message);
