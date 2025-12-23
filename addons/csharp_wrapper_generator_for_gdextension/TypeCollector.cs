@@ -259,10 +259,6 @@ public partial class WrapperGeneratorMain
                 foreach (var methodDefinition in methodDefinitions)
                 {
                     var methodInfo = CreateFunctionInfo(godotTypeMap, methodDefinition, logger);
-                    if (!exposeInternalMembers
-                        && methodInfo.GodotFunctionName.IsInternal()
-                        && !methodInfo.Flags.HasFlag(MethodFlags.Virtual)
-                        && !methodInfo.Flags.HasFlag(MethodFlags.VirtualRequired)) continue;
                     godotClassType.Methods.Add(methodInfo);
                 }
                 if (logger.TryGetMessages(out var message)) warnings.Add(message);
@@ -299,6 +295,18 @@ public partial class WrapperGeneratorMain
                     if (propertyInfo.Setter is not null) godotClassType.Methods.Remove(propertyInfo.Setter);
                 }
                 if (logger.TryGetMessages(out var message)) warnings.Add(message);
+
+                if (!exposeInternalMembers)
+                {
+                    for (int i = godotClassType.Methods.Count - 1; i >= 0; i--)
+                    {
+                        var method = godotClassType.Methods[i];
+                        if (!method.GodotFunctionName.IsInternal()
+                            || method.Flags.HasFlag(MethodFlags.Virtual)
+                            || method.Flags.HasFlag(MethodFlags.VirtualRequired)) continue;
+                        godotClassType.Methods.RemoveAt(i);
+                    }
+                }
             }
 
             foreach (var godotClassType in godotTypeMap.SelectTypes(ClassDB.ApiType.Extension))
