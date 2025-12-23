@@ -273,7 +273,9 @@ public partial class WrapperGeneratorMain
                     var propertyInfo = CreatePropertyInfo(propertyDefinition, godotTypeMap, logger);
                     if (!exposeInternalMembers && propertyInfo.GodotName.IsInternal()) continue;
                     var csharpPropertyName = new CSharpName(propertyInfo.GodotName.String.ToPascalCase());
-                    if (propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)) continue;
+                    if (propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) 
+                        || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)
+                        || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Subgroup)) continue;
                     var getter = ClassDBAccess.ClassGetPropertyGetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
                     var setter = ClassDBAccess.ClassGetPropertySetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
                     var getterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == getter);
