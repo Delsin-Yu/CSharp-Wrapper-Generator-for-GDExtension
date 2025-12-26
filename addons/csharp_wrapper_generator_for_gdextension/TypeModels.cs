@@ -114,10 +114,9 @@ public partial class WrapperGeneratorMain
                   {{indent}}/// <returns>The existing or a new instance of the <see cref="{{CSharpTypeName}}"/> wrapper script attached to the supplied <paramref name="godotObject"/>.</returns>
                   {{indent}}public new static {{CSharpTypeName}} {{BindMethodName}}(GodotObject godotObject)
                   {{indent}}{
-                  #if DEBUG
                   {{indent + indent}}if (!IsInstanceValid(godotObject))
-                  {{indent + indent + indent}}throw new InvalidOperationException("The supplied GodotObject instance is not valid.");
-                  #endif
+                  {{indent + indent + indent}}return null;
+
                   {{indent + indent}}if (godotObject is {{CSharpTypeName}} wrapperScriptInstance)
                   {{indent + indent + indent}}return wrapperScriptInstance;
 
