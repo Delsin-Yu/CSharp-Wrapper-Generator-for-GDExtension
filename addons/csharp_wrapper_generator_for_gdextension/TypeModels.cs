@@ -526,6 +526,27 @@ public partial class WrapperGeneratorMain
         }
     }
 
+    private record GodotPropertyMeta(
+        GodotName Name,
+        GodotName ClassName,
+        Variant.Type Type,
+        PropertyHint Hint,
+        string HintString,
+        PropertyUsageFlags Usage
+    )
+    {
+        public static GodotPropertyMeta Create(Godot.Collections.Dictionary propertyInfo)
+        {
+            var name = propertyInfo["name"].AsString();
+            var className = propertyInfo["class_name"].AsString();
+            var type = (Variant.Type)propertyInfo["type"].AsInt64();
+            var hint = (PropertyHint)propertyInfo["hint"].AsInt64();
+            var hintString = propertyInfo["hint_string"].AsString();
+            var usage = (PropertyUsageFlags)propertyInfo["usage"].AsInt64();
+            return new GodotPropertyMeta(new(name), new(className), type, hint, hintString, usage);
+        }
+    }
+
     private record GodotPropertyInfo(
         GodotName GodotName,
         CSharpName CSharpName,
@@ -535,6 +556,15 @@ public partial class WrapperGeneratorMain
         PropertyUsageFlags Usage
     )
     {
+        public static GodotPropertyInfo Create(GodotPropertyMeta meta, GodotType propertyType)
+        {
+            var name = meta.Name;
+            var hint = meta.Hint;
+            var hintString = meta.HintString;
+            var usage = meta.Usage;
+            return new(name, new(name.String.ToCamelCase()), propertyType, hint, hintString, usage);
+        }
+        
         public bool IsGDExtensionType => Type is GodotClassType godotClass && godotClass.IsGDExtensionType;
 
         public override string ToString() => $"{Type} {CSharpName.EscapedString}";
@@ -946,6 +976,7 @@ public partial class WrapperGeneratorMain
         public Dictionary<GodotNamedType, Dictionary<GodotName, GodotEnumType>> PreregisteredEnumTypes { get; } = [];
         public Dictionary<NormalizedEnumConstantsString, Dictionary<GodotType, Dictionary<GodotName, GodotEnumType>>> PreregisteredEnumTypesByName { get; } = [];
         public Dictionary<GodotName, GodotEnumType> GlobalScopeEnumTypes { get; } = [];
+        public Dictionary<string, Type> GodotCsharpTypes { get; } = [];
 
         public bool TryGetVariantType(Variant.Type variantTypeEnum, out GodotAnnotatedVariantType variantType)
         {

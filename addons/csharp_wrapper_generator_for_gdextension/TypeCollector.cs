@@ -10,6 +10,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Godot;
 using GodotDictionary = Godot.Collections.Dictionary;
@@ -52,20 +53,50 @@ public partial class WrapperGeneratorMain
 
         private static void PopulateGodotClassTypes(GodotTypeMap godotTypeMap)
         {
-            Dictionary<GodotName, CSharpName> godotTypeNameToCSharpTypeNameMap = typeof(GodotObject).Assembly
+            var godotObjectType = typeof(GodotObject);
+            var builtinCsharpTypes = godotObjectType.Assembly
                 .GetTypes()
-                .Select(x => (Attribute: x.GetCustomAttributesData().FirstOrDefault(y => y.AttributeType == typeof(GodotClassNameAttribute)), Type: x))
-                .Where(x => x.Attribute != null)
-                .Select(x => (GodotTypeName: new GodotName(x.Attribute.ConstructorArguments[0].Value!.ToString()), CSharpTypeName: new CSharpName(x.Type.Name)))
-                .GroupBy(x => x.GodotTypeName)
-                .ToDictionary(
-                    x => x.Key,
-                    x =>
-                        x.Count() > 1
-                            ? x.First(y => !y.CSharpTypeName.String.Contains("Instance")).CSharpTypeName
-                            : x.First().CSharpTypeName
-                );
+                .Where(type => godotObjectType.IsAssignableFrom(type))
+                .ToArray();
 
+            foreach (var builtinCsharpType in builtinCsharpTypes) 
+                godotTypeMap.GodotCsharpTypes.TryAdd(builtinCsharpType.Name, builtinCsharpType);
+            
+            var collectedBuiltinTypes = builtinCsharpTypes
+                .Select(x =>
+                {
+                    var customNamingAttribute = x.GetCustomAttributesData().FirstOrDefault(y => y.AttributeType == typeof(GodotClassNameAttribute));
+                    return customNamingAttribute != null
+                        ? (GodotTypeName: new GodotName(customNamingAttribute.ConstructorArguments[0].Value!.ToString()),
+                            CSharpTypeName: new CSharpName(x.Name))
+                        : (GodotTypeName: new GodotName(x.Name), CSharpTypeName: new CSharpName(x.Name));
+                })
+                .GroupBy(x => x.GodotTypeName)
+                .ToDictionary(x => x.Key, x => x.ToArray());
+
+            Dictionary<GodotName, CSharpName> godotTypeNameToCSharpTypeNameMap = new();
+            foreach (var collectedBuiltinType in collectedBuiltinTypes)
+            {
+                if (collectedBuiltinType.Value.Length > 1)
+                {
+                    var nonInstanceType = collectedBuiltinType.Value.FirstOrDefault(x => !x.CSharpTypeName.String.Contains("Instance"));
+                    if (nonInstanceType != default)
+                    {
+                        godotTypeNameToCSharpTypeNameMap.Add(collectedBuiltinType.Key, nonInstanceType.CSharpTypeName);
+                    }
+                    else
+                    {
+                        GD.PrintErr($"Multiple types with GodotTypeName {collectedBuiltinType.Key} found, but all of them are instance types. This may cause issues with type resolution for the GodotType {collectedBuiltinType.Key}.");
+                    }
+
+                    continue;
+                }
+                var typeInfo = collectedBuiltinType.Value[0];
+                godotTypeNameToCSharpTypeNameMap.Add(typeInfo.GodotTypeName,
+                    typeInfo.CSharpTypeName.String.Contains("Instance")
+                        ? new(typeInfo.GodotTypeName.String)
+                        : typeInfo.CSharpTypeName);
+            }
 
             foreach (var godotClassName in ClassDBAccess.GetClassList())
             {
@@ -207,9 +238,26 @@ public partial class WrapperGeneratorMain
             {
                 var logger = new GenerationLogger(godotClassType);
                 var enumNames = ClassDBAccess.ClassGetEnumList(godotClassType.GodotTypeName, true);
+                string[] csharpEnumNames = [];
+                if (godotTypeMap.GodotCsharpTypes.TryGetValue(godotClassType.CSharpTypeName.String, out var godotCsharpType))
+                {
+                    csharpEnumNames = godotCsharpType.GetNestedTypes(BindingFlags.Public)
+                        .Where(nestedType => nestedType.IsEnum)
+                        .Select(x => x.Name)
+                        .ToArray();
+                }
+                
                 foreach (var enumName in enumNames)
                 {
-                    var enumType = new GodotEnumType(enumName, new(enumName.ToPascalCase()), godotClassType, ClassDBAccess.IsClassEnumBitfield(godotClassType.GodotTypeName, enumName, true));
+                    var aliasedEnumName = enumName;
+                    foreach (var csharpEnumName in csharpEnumNames)
+                    {
+                        if (!csharpEnumName.Contains(aliasedEnumName.String, StringComparison.OrdinalIgnoreCase)) continue;
+                        aliasedEnumName = new(csharpEnumName);
+                        break;
+                    }
+                    
+                    var enumType = new GodotEnumType(enumName, new(aliasedEnumName.String), godotClassType, ClassDBAccess.IsClassEnumBitfield(godotClassType.GodotTypeName, enumName, true));
                     var isFirst = true;
                     foreach (var enumConstant in ClassDBAccess.ClassGetEnumConstants(godotClassType.GodotTypeName, enumName, true))
                     {
@@ -270,21 +318,24 @@ public partial class WrapperGeneratorMain
                 var propertyDefinitions = ClassDBAccess.ClassGetPropertyList(godotClassType.GodotTypeName, true);
                 foreach (var propertyDefinition in propertyDefinitions)
                 {
-                    var propertyInfo = CreatePropertyInfo(propertyDefinition, godotTypeMap, logger);
-                    if (!exposeInternalMembers && propertyInfo.GodotName.IsInternal()) continue;
-                    var csharpPropertyName = new CSharpName(propertyInfo.GodotName.String.ToPascalCase());
-                    if (propertyInfo.Usage.HasFlag(PropertyUsageFlags.Group) 
-                        || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Category)
-                        || propertyInfo.Usage.HasFlag(PropertyUsageFlags.Subgroup)) continue;
-                    var getter = ClassDBAccess.ClassGetPropertyGetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
-                    var setter = ClassDBAccess.ClassGetPropertySetter(godotClassType.GodotTypeName, propertyInfo.GodotName);
+                    var propertyMeta = GodotPropertyMeta.Create(propertyDefinition);
+                    if (!exposeInternalMembers && propertyMeta.Name.IsInternal()) continue;
+                    var csharpPropertyName = new CSharpName(propertyMeta.Name.String.ToPascalCase());
+                    if (propertyMeta.Usage.HasFlag(PropertyUsageFlags.Group) 
+                        || propertyMeta.Usage.HasFlag(PropertyUsageFlags.Category)
+                        || propertyMeta.Usage.HasFlag(PropertyUsageFlags.Subgroup)) continue;
+                    var getter = ClassDBAccess.ClassGetPropertyGetter(godotClassType.GodotTypeName, propertyMeta.Name);
+                    var setter = ClassDBAccess.ClassGetPropertySetter(godotClassType.GodotTypeName, propertyMeta.Name);
                     var getterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == getter);
                     var setterMethod = godotClassType.Methods.FirstOrDefault(x => x.GodotFunctionName == setter);
+                    GodotType type = godotTypeMap.Variant;
+                    if(getterMethod is not null) type = getterMethod.ReturnValue.Type;
+                    else if (setterMethod is not null && setterMethod.FunctionArguments.Count > 0) type = setterMethod.FunctionArguments[0].Info.Type;
                     godotClassType.Properties.Add(
                         new(
-                            propertyInfo.GodotName,
+                            propertyMeta.Name,
                             csharpPropertyName,
-                            propertyInfo.Type,
+                            type,
                             setterMethod,
                             getterMethod
                         )
@@ -346,7 +397,7 @@ public partial class WrapperGeneratorMain
 
             using var _ = logger.BeginScope(methodName);
 
-            var returnValue = CreatePropertyInfo(methodDefinition["return"].AsGodotDictionary(), godotTypeMap, logger);
+            var returnValue = InferPropertyInfo(methodDefinition["return"].AsGodotDictionary(), godotTypeMap, logger);
 
             var methodInfo = new GodotFunctionInfo(
                 new(methodName),
@@ -366,7 +417,7 @@ public partial class WrapperGeneratorMain
             for (var index = 0; index < argsLength; index++)
             {
                 var methodArgumentInfo = args[index];
-                var argument = CreatePropertyInfo(methodArgumentInfo, godotTypeMap, logger);
+                var argument = InferPropertyInfo(methodArgumentInfo, godotTypeMap, logger);
                 if (index >= defaultArgsStartIndex)
                 {
                     var defaultValue = defaultArgs[index - defaultArgsStartIndex];
@@ -381,20 +432,20 @@ public partial class WrapperGeneratorMain
             return methodInfo;
         }
 
+        private static GodotPropertyInfo InferPropertyInfo(GodotDictionary dictionary, GodotTypeMap godotTypeMap, GenerationLogger logger) => 
+            InferPropertyInfo(GodotPropertyMeta.Create(dictionary), godotTypeMap, logger);
 
-        private static GodotPropertyInfo CreatePropertyInfo(GodotDictionary propertyInfo, GodotTypeMap godotTypeMap, GenerationLogger logger)
+        private static GodotPropertyInfo InferPropertyInfo(GodotPropertyMeta propertyMeta, GodotTypeMap godotTypeMap, GenerationLogger logger)
         {
-            var name = propertyInfo["name"].AsString();
-            using var _ = logger.BeginScope(name);
-            var className = propertyInfo["class_name"].AsString();
-            var type = (Variant.Type)propertyInfo["type"].AsInt64();
-            var hint = (PropertyHint)propertyInfo["hint"].AsInt64();
-            var hintString = propertyInfo["hint_string"].AsString();
-            var usage = (PropertyUsageFlags)propertyInfo["usage"].AsInt64();
-
-            var propertyType = GetGodotTypeByPropertyDefinition(godotTypeMap, usage, new(string.IsNullOrEmpty(className) ? hintString : className), type, hint, hintString, name, logger);
-
-            return new(new(name), new(name.ToCamelCase()), propertyType, hint, hintString, usage);
+            var name = propertyMeta.Name;
+            using var _ = logger.BeginScope(name.String);
+            var className = propertyMeta.ClassName;
+            var type = propertyMeta.Type;
+            var hint = propertyMeta.Hint;
+            var hintString = propertyMeta.HintString;
+            var usage = propertyMeta.Usage;
+            var propertyType = GetGodotTypeByPropertyDefinition(godotTypeMap, usage, new(string.IsNullOrEmpty(className.String) ? hintString : className.String), type, hint, hintString, name.String, logger);
+            return GodotPropertyInfo.Create(propertyMeta, propertyType);
         }
 
         private static NormalizedEnumConstantsString NormalizeString(IEnumerable<string> sourceString) => string.Join(',', sourceString.Select(x => x.ToSnakeCase().ToUpperInvariant()).OrderBy(x => x));
