@@ -165,6 +165,7 @@ public partial class WrapperGeneratorMain
             RenderCacheString(
                 classBuilder,
                 "GDExtensionSignalName",
+                "SignalName",
                 indent,
                 Signals,
                 info => (info.CSharpFunctionName, info.GodotFunctionName)
@@ -179,6 +180,7 @@ public partial class WrapperGeneratorMain
             RenderCacheString(
                 classBuilder,
                 "GDExtensionPropertyName",
+                "PropertyName",
                 indent,
                 Properties,
                 info => (info.CSharpPropertyName, info.GodotPropertyName)
@@ -193,6 +195,7 @@ public partial class WrapperGeneratorMain
             RenderCacheString(
                 classBuilder,
                 "GDExtensionMethodName",
+                "MethodName",
                 indent,
                 Methods,
                 info => (info.CSharpFunctionName, info.GodotFunctionName)
@@ -208,13 +211,26 @@ public partial class WrapperGeneratorMain
                 .AppendLine("}");
         }
 
-        private static void RenderCacheString<T>(StringBuilder builder, string className, string indent, IList<T> elements, Func<T, (CSharpName, GodotName)> selector)
+        private void RenderCacheString<T>(
+            StringBuilder builder,
+            string className,
+            string builtinClassName,
+            string indent,
+            IList<T> elements,
+            Func<T, (CSharpName, GodotName)> selector
+        )
         {
-            if (elements.Count == 0) return;
+            var parentCacheNameClass = ParentType switch
+            {
+                GodotClassType parentClassType when parentClassType.IsGDExtensionType => $"{parentClassType.CSharpTypeName}.{className}",
+                GodotClassType parentClassType => $"{parentClassType.CSharpTypeName}.{builtinClassName}",
+                GodotAnnotatedVariantType { VariantType: Variant.Type.Object } => $"{nameof(GodotObject)}.{builtinClassName}",
+                _ => throw new UnreachableException()
+            };
 
             builder.AppendLine(
                 $$"""
-                  {{indent}}public new static class {{className}}
+                  {{indent}}public new class {{className}} : {{parentCacheNameClass}}
                   {{indent}}{
                   """
             );
@@ -222,7 +238,14 @@ public partial class WrapperGeneratorMain
             foreach (var element in elements)
             {
                 var (elementCSharpName, elementGodotName) = selector(element);
-                builder.AppendLine($"{indent + indent}public new static readonly StringName {elementCSharpName} = \"{elementGodotName}\";");
+                builder.AppendLine(
+                    $$"""
+                      {{indent + indent}}/// <summary>
+                      {{indent + indent}}/// Cached name for the '{{elementGodotName}}' member.
+                      {{indent + indent}}/// </summary>
+                      {{indent + indent}}public new static readonly StringName {{elementCSharpName}} = "{{elementGodotName}}";
+                      """
+                );
             }
 
             builder.AppendLine(
