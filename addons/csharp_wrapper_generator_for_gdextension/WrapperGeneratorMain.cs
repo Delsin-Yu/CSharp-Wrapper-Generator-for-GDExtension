@@ -1,10 +1,5 @@
 #if TOOLS
-using System;
-using System.Collections.Concurrent;
-using System.IO;
-using System.Linq;
 using Godot;
-using FileAccess = Godot.FileAccess;
 
 namespace GDExtensionAPIGenerator;
 
@@ -19,8 +14,6 @@ public partial class WrapperGeneratorMain : EditorPlugin
     private OptionButton _internalVisibilityMode;
     private EditorSettings _editorSettings;
 
-    private const string DefaultNamespace = "GDExtension.Wrappers";
-    private const string DefaultPath = "GDExtensionWrappers";
     private const int DefaultIndentationMode = IndentationSpacesId;
     private const string NamespaceSavePath = "gdextension_wrapper_generator/namespace";
     private const string PathSavePath = "gdextension_wrapper_generator/target_path";
@@ -66,7 +59,7 @@ public partial class WrapperGeneratorMain : EditorPlugin
         _targetPath = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
         if(!_editorSettings.HasSetting(PathSavePath) || _editorSettings.GetSetting(PathSavePath).VariantType != Variant.Type.String) 
-            _editorSettings.SetSetting(PathSavePath, DefaultPath);
+            _editorSettings.SetSetting(PathSavePath, DefaultOutputPath);
         var pathPropertyInfo = new Godot.Collections.Dictionary
         {
             { "name", PathSavePath },
@@ -139,8 +132,6 @@ public partial class WrapperGeneratorMain : EditorPlugin
 
     private void DoGenerate()
     {
-        var warnings = new ConcurrentBag<string>();
-                
         var internalVisibilityMode = _internalVisibilityMode.GetSelectedId();
         var exposeInternalMembers = internalVisibilityMode switch
         {
@@ -148,86 +139,37 @@ public partial class WrapperGeneratorMain : EditorPlugin
             InternalExposeId => true,
             _ => false
         };
-        
-        TypeCollector.CreateClassDiagram(exposeInternalMembers, out var gdExtensionTypes, warnings);
-        
-        var files = new ConcurrentBag<FileConstruction>();
-        
-        var escapedNamespace = EscapeNamespaceKeyWords(_nameSpace.Text);
-        if (escapedNamespace != _nameSpace.Text)
-        {
-            GD.PushWarning($"The namespace contained invalid characters and was escaped to '{escapedNamespace}'");
-            _nameSpace.Text = escapedNamespace;
-        }
-        _editorSettings.Set(NamespaceSavePath, escapedNamespace);
-        
+
         var indentationMode = _indentationMode.GetSelectedId();
-        var indent = indentationMode switch
-        {
-            IndentationSpacesId => "    ",
-            IndentationTabsId => "\t",
-            _ => "    "
-        };
+        var useTabs = indentationMode == IndentationTabsId;
 
-        gdExtensionTypes.AsParallel().ForAll(type => TypeWriter.WriteType(type, escapedNamespace, indent, files, warnings));
-        files.Add(TypeWriter.CreateEnumExtensionsFile(escapedNamespace));
+        var options = new WrapperGeneratorOptions(
+            _nameSpace.Text,
+            _targetPath.Text,
+            useTabs,
+            exposeInternalMembers);
 
-        var escapedPath = EscapePath(_targetPath.Text);
-        if (escapedPath != _targetPath.Text)
+        var result = WrapperGeneratorRunner.Run(options);
+
+        if (result.EscapedNamespace != _nameSpace.Text)
         {
-            GD.PushWarning($"The target path contained invalid characters and was escaped to '{escapedPath}'");
-            _targetPath.Text = escapedPath;
+            GD.PushWarning($"The namespace contained invalid characters and was escaped to '{result.EscapedNamespace}'");
+            _nameSpace.Text = result.EscapedNamespace;
         }
-        _editorSettings.Set(PathSavePath, escapedPath);
+        _editorSettings.Set(NamespaceSavePath, result.EscapedNamespace);
 
-        var godotTargetPath = $"res://{escapedPath}";
-        var outputDir = ProjectSettings.GlobalizePath(godotTargetPath);
-        if (!Directory.Exists(outputDir))
-            Directory.CreateDirectory(outputDir!);
-        else
-            foreach (var path in Directory.GetFiles(outputDir, "*.cs"))
-            {
-                try
-                {
-                    File.Delete(path);
-                }
-                catch (Exception e)
-                {
-                    GD.PrintErr($"Unable to delete old wrapper file at path {path}, exception: {e}");
-                    return;
-                }
-            }
-
-        foreach (var file in files)
+        if (result.EscapedOutputPathRelative != _targetPath.Text)
         {
-            var targetPath = godotTargetPath.PathJoin(file.FileName);
-            using var fileAccess = FileAccess.Open(targetPath, FileAccess.ModeFlags.Write);
-            fileAccess.StoreString(file.SourceCode);
+            GD.PushWarning($"The target path contained invalid characters and was escaped to '{result.EscapedOutputPathRelative}'");
+            _targetPath.Text = result.EscapedOutputPathRelative;
         }
+        _editorSettings.Set(PathSavePath, result.EscapedOutputPathRelative);
 
-        var warningArray = warnings.ToHashSet().Order().ToArray();
-        if (warningArray.Length != 0)
+        if (result.Warnings.Length != 0)
         {
-            GD.PushWarning($"({warningArray.Length}) warning(s) during rendering the GDExtension wrapper classes:");
-            foreach (var warningMessage in warningArray)
+            GD.PushWarning($"({result.Warnings.Length}) warning(s) during rendering the GDExtension wrapper classes:");
+            foreach (var warningMessage in result.Warnings)
                 GD.PushWarning(warningMessage);
-        }
-
-        foreach (var uidPath in Directory.GetFiles(outputDir, "*.uid"))
-        {
-            var directory = Path.GetDirectoryName(uidPath);
-            if (directory is null) continue;
-            var originalFileName = Path.GetFileName(uidPath);
-            if (originalFileName.GetExtension() != "cs") continue;
-            if (File.Exists(Path.Combine(directory, originalFileName))) continue;
-            try
-            {
-                File.Delete(uidPath);
-            }
-            catch (Exception e)
-            {
-                GD.PrintErr($"Unable to delete old wrapper uid file at path {uidPath}, exception: {e}");
-            }
         }
     }
 }

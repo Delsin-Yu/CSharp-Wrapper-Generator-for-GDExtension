@@ -46,9 +46,92 @@ By inheriting a wrapper type, you can code as if you were inheriting built-in Go
 8. Uncomment everything in `Test.cs`.  
 9. Run the project.
 
+### CLI generation
+
+You can regenerate wrappers from the command line (for CI or after building a `.gdextension`), without opening the editor UI.
+
+**Prerequisites**
+
+- A **Godot .NET editor** binary (not an export template), e.g. `Godot_v4.x-stable_mono_win64.exe` on Windows or `godot-mono` on Linux.
+- The **consumer Godot project** that contains your `.gdextension` files (and this addon under `addons/csharp_wrapper_generator_for_gdextension/`).
+- A **built C# solution** for that project (`dotnet build`, or build once from the Godot editor).
+
+**Helper scripts** (in `addons/csharp_wrapper_generator_for_gdextension/scripts/`):
+
+| Platform | Script |
+|----------|--------|
+| Linux / macOS | `./generate-wrappers.sh` |
+| Windows (PowerShell) | `.\generate-wrappers.ps1` |
+| Windows (cmd) | `generate-wrappers.bat` |
+
+Run from any directory; the scripts locate the project root via `project.godot`, verify the [.NET SDK](https://dot.net/sdk) is installed, run `dotnet build` on the project’s `.csproj` (skip with `SKIP_BUILD=1`), then invoke Godot. Set `GODOT_BIN` if Godot is not on `PATH`.
+
+```bash
+# Linux / macOS
+chmod +x addons/csharp_wrapper_generator_for_gdextension/scripts/generate-wrappers.sh
+./addons/csharp_wrapper_generator_for_gdextension/scripts/generate-wrappers.sh
+
+# Windows PowerShell
+.\addons\csharp_wrapper_generator_for_gdextension\scripts\generate-wrappers.ps1 -- --help
+```
+
+**Command** (manual invocation)
+
+```bash
+godot-mono --headless --path /path/to/your/project \
+  --script res://addons/csharp_wrapper_generator_for_gdextension/cli_entrypoint.gd
+```
+
+Optional arguments after `--` (same defaults as the editor dock). Flags override positionals when both are used.
+
+| Argument | Description |
+|----------|-------------|
+| `[OUTPUT_PATH]` | Output folder under `res://` if `--output` not set |
+| `[NAMESPACE]` | C# namespace if `--namespace` not set |
+| `-o`, `--output`, `--path`, `--target-path`, `--save-path` | Output path (`--output=value` supported) |
+| `-n`, `--namespace` | Namespace |
+| `-i`, `--indent`, `--indentation` | `spaces`, `tabs`, `0`, or `1` |
+| `--spaces`, `--tabs` | Shorthand for indentation |
+| `--expose-internal`, `--internal`, `--expose` | Expose internal (`_`) members; optional `=true/false` |
+| `--hide-internal`, `--no-expose-internal` | Hide internal members; optional `=true/false` |
+| `--internal-visibility` | `expose` or `hide` / `do-not-expose` |
+| `--use-editor-settings` | Use saved plugin settings for any option not passed on the CLI (requires `--editor`) |
+| `-h`, `--help` | Show help |
+| `-v`, `--version` | Show version |
+
+Exit codes: `0` success, `1` generation failure, `2` invalid arguments.
+
+**Examples**
+
+```bash
+# Defaults (GDExtensionWrappers, GDExtension.Wrappers)
+godot-mono --headless --path . \
+  --script res://addons/csharp_wrapper_generator_for_gdextension/cli_entrypoint.gd
+
+# Positional output path and namespace
+godot-mono --headless --path . \
+  --script res://addons/csharp_wrapper_generator_for_gdextension/cli_entrypoint.gd -- \
+  GDExtensionWrappers GDExtension.Wrappers
+
+# Flags
+godot-mono --headless --path . \
+  --script res://addons/csharp_wrapper_generator_for_gdextension/cli_entrypoint.gd -- \
+  --output MyWrappers --namespace MyGame.GDExtension --indent tabs
+```
+
+**Post-build hook (example):** run the command above after your GDExtension native library is built so wrappers stay in sync with ClassDB.
+
+**Editor settings on CI:** pass `--editor` with `--use-editor-settings` to reuse the same namespace, path, indentation, and internal visibility as the dock:
+
+```bash
+godot-mono --editor --headless --path . \
+  --script res://addons/csharp_wrapper_generator_for_gdextension/cli_entrypoint.gd -- \
+  --use-editor-settings
+```
+
 ### Limitations
 
-- The generator is written in C#, requiring a Mono version of Godot. Future plans include migrating the generator to GDScript or a standalone application.
+- The generator core is written in C# and requires a Mono/editor build of Godot.
 - Virtual method support is missing (contributions are welcome).  
 - This is a new project, and the wrappers are not yet thoroughly tested.  
 - Calls use Godot reflections (`ClassDB.Call`), so performance may not match plain C# implementations.
@@ -173,9 +256,55 @@ public partial class Test : Node
 8. 取消注释 `Test.cs` 中的所有内容。  
 9. 运行项目。
 
+### 命令行生成
+
+可在命令行中重新生成包装器（适用于 CI 或在构建 `.gdextension` 之后），无需打开编辑器 UI。
+
+**前提条件**
+
+- **Godot .NET 编辑器**可执行文件（不是导出模板），例如 Windows 上的 `Godot_v4.x-stable_mono_win64.exe` 或 Linux 上的 `godot-mono`。
+- 包含 `.gdextension` 文件的**目标 Godot 项目**（以及 `addons/csharp_wrapper_generator_for_gdextension/` 下的本插件）。
+- 已为该项目**构建 C# 解决方案**（`dotnet build`，或在 Godot 编辑器中构建一次）。
+
+**辅助脚本**（位于 `addons/csharp_wrapper_generator_for_gdextension/scripts/`）：
+
+| 平台 | 脚本 |
+|------|------|
+| Linux / macOS | `./generate-wrappers.sh` |
+| Windows (PowerShell) | `.\generate-wrappers.ps1` |
+| Windows (cmd) | `generate-wrappers.bat` |
+
+脚本会自动定位项目根目录、检查是否已安装 [.NET SDK](https://dot.net/sdk)、对项目的 `.csproj` 执行 `dotnet build`（可用 `SKIP_BUILD=1` 跳过），并调用 Godot。若 Godot 不在 `PATH` 中，请设置 `GODOT_BIN`。
+
+**命令**（手动调用）
+
+```bash
+godot-mono --headless --path /path/to/your/project \
+  --script res://addons/csharp_wrapper_generator_for_gdextension/cli_entrypoint.gd
+```
+
+`--` 之后的可选参数（默认值与编辑器面板相同）。若同时指定标志与位置参数，以标志为准。
+
+| 参数 | 说明 |
+|------|------|
+| `[OUTPUT_PATH]` | 未指定 `--output` 时的输出目录 |
+| `[NAMESPACE]` | 未指定 `--namespace` 时的命名空间 |
+| `-o`, `--output`, `--path`, `--target-path`, `--save-path` | 输出路径（支持 `--output=值`） |
+| `-n`, `--namespace` | 命名空间 |
+| `-i`, `--indent`, `--indentation` | `spaces`、`tabs`、`0` 或 `1` |
+| `--spaces`, `--tabs` | 缩进简写 |
+| `--expose-internal`, `--internal`, `--expose` | 暴露 internal 成员；可选 `=true/false` |
+| `--hide-internal`, `--no-expose-internal` | 不暴露 internal 成员 |
+| `--internal-visibility` | `expose` 或 `hide` / `do-not-expose` |
+| `--use-editor-settings` | 对未在命令行指定的项使用插件已保存设置（需加 `--editor`） |
+| `-h`, `--help` | 显示帮助 |
+| `-v`, `--version` | 显示版本 |
+
+**退出码：** `0` 成功，`1` 生成失败，`2` 参数无效。
+
 ### 限制
 
-- 生成器是用 C# 编写的，需要 Mono 版本的 Godot。未来计划将生成器迁移到 GDScript 或独立应用程序。
+- 生成器核心使用 C# 编写，需要 Mono/编辑器版本的 Godot。
 - 缺少虚方法支持（欢迎贡献）。  
 - 这是一个新项目，包装器尚未经过彻底测试。  
 - 调用使用 Godot 反射（`ClassDB.Call`），因此性能可能不如纯 C# 实现。
