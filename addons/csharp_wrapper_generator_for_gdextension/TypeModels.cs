@@ -38,6 +38,18 @@ public partial class WrapperGeneratorMain
 
             return depth;
         }
+
+        public bool IsInheritedFrom(GodotName other)
+        {
+            var currentType = ParentType;
+            while (currentType != null)
+            {
+                if (currentType.GodotTypeName == other) return true;
+                currentType = (currentType as GodotClassType)?.ParentType;
+            }
+
+            return false;
+        }
         
         public GodotNamedType ParentType { get; set; }
         public List<GodotFunctionInfo> Methods { get; } = [];
@@ -63,6 +75,7 @@ public partial class WrapperGeneratorMain
         private const string BindMethodName = "Bind";
         private const string TypeGDExtensionCacheName = "NativeName";
         private const string WrapperConstructorName = "Instantiate";
+        private const string WrapperResourceLoadMethodName = "Load";
 
         public void RenderClass(StringBuilder classBuilder, string nameSpace, string indent, GenerationLogger logger)
         {
@@ -151,6 +164,21 @@ public partial class WrapperGeneratorMain
                      {indent}/// </summary>
                      {indent}/// <returns>The wrapper instance linked to the underlying GDExtension "{GodotTypeName}" type.</returns>
                      {indent}public new static {CSharpTypeName} {WrapperConstructorName}() => {BindMethodName}(ClassDB.Instantiate({TypeGDExtensionCacheName}).As<GodotObject>());
+
+                     """
+                );
+            }
+
+            if (IsInheritedFrom(new GodotName("Resource")))
+            {
+                classBuilder.AppendLine(
+                    $"""
+                     {indent}/// <summary>
+                     {indent}/// Loads the resource at the specified path, then attaches the corresponding wrapper script instance.
+                     {indent}/// </summary>
+                     {indent}/// <param name="path">The resource path to load.</param>
+                     {indent}/// <returns>The wrapper instance linked to the underlying GDExtension "{GodotTypeName}" type.</returns>
+                     {indent}public new static {CSharpTypeName} {WrapperResourceLoadMethodName}(string path) => {BindMethodName}(ResourceLoader.Load(path));
 
                      """
                 );

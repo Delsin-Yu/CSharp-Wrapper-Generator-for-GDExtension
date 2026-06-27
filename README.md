@@ -22,6 +22,8 @@ To create a GDExtension type instance, call `TypeName.Instantiate()`.
 
 To bind (wrap) a GDExtension type instance, call `TypeName.Bind(instance)`.
 
+To load and bind (wrap) a `Resource`-derived GDExtension type from a path, call `TypeName.Load(path)`.
+
 #### API Support
 
 The following type members are supported by the wrappers:
@@ -106,6 +108,11 @@ public partial class Test : Node
         gdCubismParameterWrapper.DefaultValue = -20;
         GD.Print(gdCubismParameterWrapper.DefaultValue);
 
+        // This loads and wraps an existing Resource-derived GDExtension type.
+        // The developer should ensure the supplied Godot object matches the underlying GDExtension type.
+        var spineSkeleton = SpineSkeletonDataResource.Load("res://path/to/resource.tres");
+        GD.Print(spineSkeleton.GetSkeletonName());
+
         // Accessing the properties and methods from
         // an exported wrapper type. The developer 
         // has to attach the wrapper script to that
@@ -148,6 +155,8 @@ public partial class Test : Node
 要创建一个 GDExtension 类型实例，请调用 `TypeName.Instantiate()`。
 
 要绑定（包装）一个 GDExtension 类型实例，请调用 `TypeName.Bind(instance)`。
+
+要从路径加载并绑定（包装）一个派生自`Resource`类的 GDExtension 类型资源，请调用 `TypeName.Load(path)`。
 
 #### API 支持
 
@@ -229,6 +238,11 @@ public partial class Test : Node
         GD.Print(gdCubismParameterWrapper.DefaultValue);
         gdCubismParameterWrapper.DefaultValue = -20;
         GD.Print(gdCubismParameterWrapper.DefaultValue);
+        
+        // 这将从指定路径加载并包装一个现有的资源类型。
+        // 开发者应确保提供的 Godot 匹配底层的 GDExtension 类型。
+        var spineSkeleton = SpineSkeletonDataResource.Load("res://path/to/resource.tres");
+        GD.Print(spineSkeleton.GetSkeletonName());
 
         // 访问导出的包装器类型的属性和方法。
         // 开发者必须将包装器脚本附加到该 GDExtension 节点实例才能工作。
