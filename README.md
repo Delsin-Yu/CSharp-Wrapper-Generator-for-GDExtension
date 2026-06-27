@@ -24,6 +24,8 @@ To bind (wrap) a GDExtension type instance, call `TypeName.Bind(instance)`.
 
 To load and bind (wrap) a `Resource`-derived GDExtension type from a path, call `TypeName.Load(path)`.
 
+To retrieve a GDExtension type node from the scene tree, use the Node extension method `node.GetTypeNameNode(path)`.
+
 #### API Support
 
 The following type members are supported by the wrappers:
@@ -113,6 +115,12 @@ public partial class Test : Node
         var spineSkeleton = SpineSkeletonDataResource.Load("res://path/to/resource.tres");
         GD.Print(spineSkeleton.GetSkeletonName());
 
+        // This gets a GDExtension type node from the scene tree and attaches its wrapper script.
+        // The developer should ensure the node matches the underlying GDExtension type.
+        var spineSprite = this.GetSpineSpriteNode("Sprite");
+        spineSprite.SkeletonDataRes = spineSkeleton;
+        GD.Print(spineSprite.Name);
+
         // Accessing the properties and methods from
         // an exported wrapper type. The developer 
         // has to attach the wrapper script to that
@@ -157,6 +165,8 @@ public partial class Test : Node
 要绑定（包装）一个 GDExtension 类型实例，请调用 `TypeName.Bind(instance)`。
 
 要从路径加载并绑定（包装）一个派生自`Resource`类的 GDExtension 类型资源，请调用 `TypeName.Load(path)`。
+
+要从节点树获取 GDExtension 类型节点，请调用`Node`类的扩展方法 `node.GetTypeNameNode(path)`。
 
 #### API 支持
 
@@ -243,6 +253,12 @@ public partial class Test : Node
         // 开发者应确保提供的 Godot 匹配底层的 GDExtension 类型。
         var spineSkeleton = SpineSkeletonDataResource.Load("res://path/to/resource.tres");
         GD.Print(spineSkeleton.GetSkeletonName());
+        
+        // 这将从节点树获取 GDExtension 类型节点，并附加包装脚本。
+        // 开发者应确保提供的 Godot 匹配底层的 GDExtension 类型。
+        var spineSprite = this.GetSpineSpriteNode("Sprite");
+        spineSprite.SkeletonDataRes = spineSkeleton;
+        GD.Print(spineSprite.Name);
 
         // 访问导出的包装器类型的属性和方法。
         // 开发者必须将包装器脚本附加到该 GDExtension 节点实例才能工作。

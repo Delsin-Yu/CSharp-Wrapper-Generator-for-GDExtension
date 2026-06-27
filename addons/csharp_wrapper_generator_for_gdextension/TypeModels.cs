@@ -77,6 +77,8 @@ public partial class WrapperGeneratorMain
         private const string WrapperConstructorName = "Instantiate";
         private const string WrapperResourceLoadMethodName = "Load";
 
+        private const string GetNodeHelperClassName = "GetNodeExtension";
+
         public void RenderClass(StringBuilder classBuilder, string nameSpace, string indent, GenerationLogger logger)
         {
             classBuilder.Append(
@@ -91,6 +93,34 @@ public partial class WrapperGeneratorMain
 
                  namespace {nameSpace};
 
+                 
+                 """
+            );
+
+            if (IsInheritedFrom(new GodotName("Node")))
+            {
+                classBuilder.AppendLine(
+                $$"""
+                  public static partial class {{GetNodeHelperClassName}}
+                  {
+                  {{indent}}/// <summary>
+                  {{indent}}/// Gets the node at the specified <paramref name="path"/>, then casts its attached script to the <see cref="{{CSharpTypeName}}"/> wrapper type.
+                  {{indent}}/// If no wrapper script is attached, or the attached script does not inherit <see cref="{{CSharpTypeName}}"/>, a new wrapper script instance is attached.
+                  {{indent}}/// </summary>
+                  {{indent}}/// <remarks>The developer must ensure the node at the given path represents the correct underlying GDExtension type.</remarks>
+                  {{indent}}/// <param name="node">The parent node from which the target node is resolved.</param>
+                  {{indent}}/// <param name="path">The child node path to resolve.</param>
+                  {{indent}}/// <returns>The existing or newly attached <see cref="{{CSharpTypeName}}"/> wrapper instance.</returns>
+                  {{indent}}public static {{CSharpTypeName}} Get{{CSharpTypeName}}Node(this Node node, NodePath path)
+                  {{indent + indent}}=> {{CSharpTypeName}}.Bind(node.GetNode(path));
+                  }
+
+                  """
+                );
+            }
+            
+            classBuilder.Append(
+                $"""
                  [Tool]
                  public 
                  """
