@@ -368,6 +368,7 @@ public partial class WrapperGeneratorMain
             if (IsBitField) builder.Append(indent).AppendLine("[Flags]");
             builder.Append($"{indent}public enum ");
             RenderEnumName(builder);
+            if (EnumConstants.Any(x => x.EnumValue > int.MaxValue)) builder.Append(" : uint");
             builder.AppendLine();
             builder.AppendLine(
                 $$"""
