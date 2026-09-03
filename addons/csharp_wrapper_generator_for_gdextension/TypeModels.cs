@@ -82,6 +82,7 @@ public partial class WrapperGeneratorMain
             classBuilder.Append(
                 $"""
                  #pragma warning disable CS0109
+                 #nullable disable
                  using System;
                  using System.Diagnostics;
                  using System.Linq;
